@@ -38,10 +38,9 @@ class UpdateEpisodeCommand(StreamingCommand):
             severity = record.get('severity')
             status = record.get('status')
             brk = record.get('break', "n").lower()
-            self.logger.info("break ERING {} ".format(brk))
             break_episode = brk.startswith("1") or brk.startswith("t") or brk.startswith("y")
 
-            self.logger.info("break ERING {} ".format(break_episode))
+            self.logger.info("breaking {} ".format(break_episode))
 
             payload = {'_key': group_id}
             if status:
@@ -54,16 +53,18 @@ class UpdateEpisodeCommand(StreamingCommand):
                 query["break_group_policy_id"] = policy_id
                 self.logger.info('BreAking Epsiode')
             self.logger.info('Payload={}'.format(query))
-            r = None
+
             try:
-                self.logger.info("before")
                 response = self.endpoint.post(path_segment="notable_event_group/"+group_id, **query)
                 self.logger.info("after {}".format(response))
                 if response:
                     self.logger.info('Sent POST request to update episode itsi_group_id="{}" status={}'.format(
                                     json.loads(response['body'].read())['_key'], response['status']))
                     record["update-status"] = response['status']
-
+                    if int(response['status']) > 299:
+                        self.logger.error("POST failed, look up ^^ ")
+                else:
+                    self.logger.error("POST failed, we shouldn't get here unless something is very broken")
             except Exception as e:
                 self.logger.error('Caught exception: {}'.format(e))
             t3 = time.time()
