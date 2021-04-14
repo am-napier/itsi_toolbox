@@ -1,22 +1,26 @@
 # itsi_toolbox
 Some resources that make some ITSI jobs a little bit easier
 
-clone or unzip in $SPLUNK_HOME/etc/apps
+Clone or unzip in $SPLUNK_HOME/etc/apps
 Add [splunklib](https://github.com/splunk/splunk-sdk-python/tree/master/splunklib) to itsi_toolbox/bin 
 
+Logging is into $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
+
 ## Commands
-###rmentity
-####Description
+
+### rmentity
+
+#### Description
 Streaming command that delete entities you no longer want from the search bar.  Every row is treated as a discrete operation.   Do not call on hundreds of rows, instead look at the filter options to delete in batch. 
 
 Runs in two modes:
-#####id
+##### id
 Uses the property id from the record to delete each entity.  This is slow but specific.
 
 Example to delete the first 10 entities returned by the lookup 
 ```| inputlookup | head 10 | rename _key as id | rmentity```
 
-#####filter
+##### filter
 Uses a filter that can target fields by value as exact text match or by regex.  If unsure of the properties available pull sample config via the [REST API](https://docs.splunk.com/Documentation/ITSI/latest/RESTAPI/ITSIRESTAPIreference#itoa_interface.2F.26lt.3Bobject_type.26gt.3B)
 
 Example to delete all entities that have a property type that matched the string 2021-03-31  
@@ -37,4 +41,4 @@ Example delete all entities in groups of 100 at a time
 
 
 ## Dashboards
-
+__TBC__
