@@ -1,5 +1,9 @@
 local/
 bin/splunklib*/
+bin/testing.py
+bin/README
+
+
 
 
 # User-specific stuff
