@@ -7,7 +7,7 @@ import unittest
 import logging
 #from bin.splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
 import bin.splunklib.client as client
-from bin.command_episodeupdate_v2 import UpdateEpisodeCommand
+from bin.command_episodeupdate import UpdateEpisodeCommand
 
 
 '''
@@ -43,7 +43,7 @@ class TestEpisodeUpdate(unittest.TestCase):
 
 class StubUpdateEpisodeCommand(UpdateEpisodeCommand):
     def __init__(self):
-        pswd = "payday$$"  # "testing@splunk"
+        pswd = "*******"
         user = "admin"
         host = "localhost"
         port = 8089
