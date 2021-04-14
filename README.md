@@ -8,14 +8,19 @@ Logging is into $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
 
 ## Commands
 
-### rmentity [by_id=<boolean> dry_run=<boolean> is_rex=<boolean>]
-| argument | description 
-| -------- | -----------
-| by_id | default true. Uses field id to find the kvstore key to delete. When false you can specify filters to delete with.
-| is_rex | default false. Applies only when by_id=false.  Changes the generated filter to use regex matching
-| dry_run | default false. Applies only when by_id=false.  When true no delete is run and each row instead generates information about what will be deleted. 
+### rmentity 
+
 #### Description
 Streaming command that delete entities you no longer want from the search bar.  Every row is treated as a discrete operation.   Do not call on hundreds of rows, instead look at the filter options to delete in batch. 
+
+usage: 
+```... | rmentity [by_id=\<boolean\> dry_run=\<boolean\> is_rex=\<boolean\>]```
+
+| Argument | Description 
+| -------- | -----------
+| by_id | Uses field id to find the kvstore key to delete. When false you can specify filters to delete with, *default=true*. 
+| is_rex | Applies only when by_id=false.  Changes the generated filter to use regex matching, *default=false*. 
+| dry_run | Applies only when by_id=false.  When true no delete is run, each row generates information fields (called filter-{string,reponse,count} about what will be deleted, *default=false*.  
 
 Runs in two modes:
 ##### id
@@ -42,8 +47,11 @@ Example delete all entities in groups of 100 at a time
     | eval filter_value="^(".mvjoin(t, "|").")$", filter_key="title" \
     | fields - t \
     | rmentity is_rex=1, dry_run=0, by_id=0 \
-    | fields - filter_value```
+    | fields - filter_value
+```
 
+## episodeeupdate
+Stream command that can change the status or severity of an active (unbroken) episode.
 
 ## Dashboards
 __TBC__
