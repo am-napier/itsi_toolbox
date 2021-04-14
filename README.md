@@ -8,21 +8,26 @@ Logging is into $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
 
 ## Commands
 
-### rmentity
-
+### rmentity [by_id=<boolean> dry_run=<boolean> is_rex=<boolean>]
+| argument | description 
+| -------- | -----------
+| by_id | default true. Uses field id to find the kvstore key to delete. When false you can specify filters to delete with.
+| is_rex | default false. Applies only when by_id=false.  Changes the generated filter to use regex matching
+| dry_run | default false. Applies only when by_id=false.  When true no delete is run and each row instead generates information about what will be deleted. 
 #### Description
 Streaming command that delete entities you no longer want from the search bar.  Every row is treated as a discrete operation.   Do not call on hundreds of rows, instead look at the filter options to delete in batch. 
 
 Runs in two modes:
 ##### id
-Uses the property id from the record to delete each entity.  This is slow but specific.
+Uses the property `id` as kvstore _key from each record to delete each entity.  This is slow but specific.
 
 Example to delete the first 10 entities returned by the lookup 
 ```| inputlookup | head 10 | rename _key as id | rmentity```
 
 ##### filter
-Uses a filter that can target fields by value as exact text match or by regex.  If unsure of the properties available pull sample config via the [REST API](https://docs.splunk.com/Documentation/ITSI/latest/RESTAPI/ITSIRESTAPIreference#itoa_interface.2F.26lt.3Bobject_type.26gt.3B)
-
+Uses a filter  comprised of two parts, filter_key and filter_value, that can target fields by value as exact text match or by regex.  If unsure of the properties available pull sample config via the [REST API](https://docs.splunk.com/Documentation/ITSI/latest/RESTAPI/ITSIRESTAPIreference#itoa_interface.2F.26lt.3Bobject_type.26gt.3B)
+Use `dry_run=true` to preview the results
+ 
 Example to delete all entities that have a property type that matched the string 2021-03-31  
 ```| makeresults | eval filter_key="last_update" filter_value="2021-03-31" | rmentity by_id=false```
 
