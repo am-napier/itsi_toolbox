@@ -1,0 +1,8 @@
+Todo's
+Refactor RMEntityCommand to help with testing
+No testing so far for hecit
+Add command to enable/disable AT per KPI/Service
+
+Dashboards:
+AT Analytics on metrics index
+Add the KPI/CS search performance dashboards

@@ -1,0 +1,17 @@
+A,B,C,D,E,F,Result
+*,*,*,*,*,*,1 catch all
+*A,*,*,*,*,*,2 A ends with A
+A*,*,*,*,*,*,3 A starts with A
+*A*,*,*,*,*,*,4  A contains A
+*,*,*,*,*,*,5 catch all 2
+*,*B,*,*,*,*,6 ends with B
+*,*B*,*,*,*,*,7 contains B
+*,B,*,*,*,*,8 exactly B
+A,*,*,*,*,*,9 exactly A
+A,*B,*,*,*,*,10 exactly A ends with B
+A,*B*,*,*,*,*,11 exactly A contains with B
+A,B,C,D,*,*,12 A B C and D exactly
+A,*,*,*,*,*,13 Exactly A 2
+*,*,*,*,*,*,14 catch all 3
+*,*,*,*,*,*,15 catch all 4
+A1,B1,C1,*,*,*,16 A1 B1 C1

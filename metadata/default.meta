@@ -1,0 +1,7 @@
+#
+# ./default.meta
+#
+[]
+access = read: [ * ], write: [ itoa_admin, itoa_team_admin ], delete: [ itoa_admin, itoa_team_admin ]
+export = system
+
