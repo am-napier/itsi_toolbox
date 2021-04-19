@@ -124,7 +124,7 @@ class RMEntityCommand(StreamingCommand):
         value = record.get("filter_value", "VALUE-NotSp3cIf13D")
         self.logger.info("delete by filter key: {}, value:{}, is_rex:{}".format(key, value, is_rex))
         value = '"%s"' % value
-        if is_rex:
+        if is_rex: #
             value = '{"$regex": %s}' % value
         entity_filter = '{"%s": %s}' % (key, value)
         url = "/servicesNS/nobody/SA-ITOA/itoa_interface/entity"

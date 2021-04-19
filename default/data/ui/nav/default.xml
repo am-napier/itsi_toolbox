@@ -1,0 +1,48 @@
+<nav search_view="search" color="#b00604">
+  <collection label="Search Health">
+    <view name="kpis"/>
+    <view name="correlation_searches"/>
+    <view name="headroom"/>
+  </collection>
+  <collection label="Data Sources">
+    <view name="data_sources"/>
+  </collection>
+  <collection label="Rules Engine">
+    <view name="rules_engine_stats"/>
+  </collection>
+  <collection label="User Hall Shame">
+    <view name="hall_of_shame"/>
+    <view name="dashboard_review"/>
+  </collection>
+  <collection label="Entity Health">
+    <view name="entity_review"/>
+  </collection>
+  <collection label="KPI Viewers">
+    <view name="service_kpi_viewer"/>
+    <view name="service_kpi_analyzer_use_for_at"/>
+  </collection>
+  <collection label="ITSI Views">
+        <collection label="Services">
+                <a href="/app/itsi/services_lister">Services</a>
+                <a href="/app/itsi/kpi_base_searches_lister">KPI Base Searches</a>
+                <a href="/app/itsi/kpi_threshold_templates_lister">KPI Threshold Templates</a>
+                <a href="/app/itsi/entities_lister">Entities</a>
+                <a href="/app/itsi/service_templates_lister">Service Templates</a>
+        </collection>
+        <collection label="Event Analytics">
+                <a href="/app/itsi/correlation_searches_lister">Correlation Searches</a>
+        <a href="/app/itsi/notable_event_aggregation_policies_lister">NEAPS</a>
+    </collection>
+    <collection label="Misc">
+        <a href="/app/itsi/backup_restore_lister">Backup and Restore</a>
+        <a href="/app/itsi/maintenance_windows_lister">Maintenance Windows</a>
+                <a href="/app/itsi/hybrid_action_dispatching_config">Hybrid Action Dispatch</a>
+        <a href="/app/itsi/itsi_modules_lister">Modules</a>
+        <a href="/app/itsi/teams_lister">Teams</a>
+        </collection>
+        <a href="/app/itsi/homeview?view=standard&amp;viewType=tile&amp;earliest=-12h&amp;latest=now">Service Analyzer</a>
+        <a href="/app/itsi/itsi_event_management">Episode Review</a>
+  </collection>
+  <view name="search" default='true' />
+  <view name="dashboards" />
+</nav>
