@@ -1,0 +1,237 @@
+<form>
+  <label>Adaptive Metrics Analyzer</label>
+  <description>Allows detailed exploration of KPI values for setting up dynamic thresholding.</description>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="time_sel" searchWhenChanged="true">
+      <label></label>
+      <default>
+        <earliest>-1w@w</earliest>
+        <latest>-0w@w</latest>
+      </default>
+    </input>
+    <input type="text" token="svc" searchWhenChanged="true">
+      <label>Service Name</label>
+      <default>*</default>
+      <initialValue>*</initialValue>
+    </input>
+    <input type="text" token="span" searchWhenChanged="true">
+      <label>Span</label>
+      <default>2h</default>
+      <initialValue>2h</initialValue>
+    </input>
+    <input type="dropdown" token="stat_op" searchWhenChanged="true">
+      <label>Statistics Op</label>
+      <choice value="avg">avg</choice>
+      <choice value="max">max</choice>
+      <choice value="min">min</choice>
+      <choice value="Perc90">p90</choice>
+      <choice value="Perc50">p50</choice>
+      <choice value="Perc10">p10</choice>
+      <default>avg</default>
+      <initialValue>avg</initialValue>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <html>
+      <ul>
+        <li>Enter a specific service name then filter down on KPIs</li>
+        <li>Charts appear once a KPI is chosen</li>
+        <li>The time picker is set to show the previous calendar week -1w@w to -0w@w</li>
+      </ul>
+    </html>
+    </panel>
+  </row>
+  <row depends="$svc$">
+    <panel>
+      <title>Services</title>
+      <table>
+        <title>Select a service to show its KPIs</title>
+        <search>
+          <query>| `service_kpi_list` | search service_name=$svc|s$ | dedup service_name | table service_name</query>
+          <earliest>-1h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <drilldown>
+          <set token="sel_svc">$row.service_name$</set>
+          <set token="xxxxsel_kpi">$row.kpi_name$</set>
+        </drilldown>
+      </table>
+    </panel>
+    <panel depends="$sel_svc$">
+      <title>KPIs</title>
+      <table>
+        <title>Select a KPI to show its aggregate and entity values</title>
+        <search>
+          <query>index=itsi_summary [| `service_kpi_list` | search (service_name="$sel_svc$") | fields kpiid | format ] | join kpiid, serviceid [|`service_kpi_list` ]
+|  stats sum(eval(if(is_service_aggregate==1, 0, 1))) as count, sum(eval(if(is_service_aggregate==1, 0, is_entity_defined))) as defined by service_name, entity_title, kpi_name
+| stats sum(count) as total, sum(defined) as defined, dc(entity_title) as numents by service_name, kpi_name
+| eval numents=numents-1, "Percent Defined"=defined/total*100, "Cohesive Available"=if(numents&gt;3 and numents&lt;31, "Yes", "No")
+| rename numents as "Number of Entities"
+| fields - total, defined</query>
+          <earliest>-1h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <drilldown>
+          <set token="sel_kpi">$row.kpi_name$</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+      <p>
+          <b>Service Pattern:</b> $svc$<br/>
+          <b>Service Name:</b> $sel_svc$<br/>
+          <b>KPI Name:</b>$sel_kpi$</p>
+    </html>
+    </panel>
+  </row>
+  <row depends="$sel_kpi$">
+    <panel>
+      <title>Service Aggregate Values - All Services Matching the Pattern</title>
+      <chart>
+        <title>Are all services showing a similar pattern, note this is for all services that match the service name pattern text field</title>
+        <search>
+          <query>| mstats $stat_op$(alert_value) prestats=t where index=itsi_summary_metrics [| `service_kpi_list` | search (service_name="$svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | rename kpiid as itsi_kpi_id | format ] AND (entity_title="service_aggregate")
+BY itsi_kpi_id span=$span$
+| join itsi_kpi_id [|`service_kpi_list` | rename kpiid as itsi_kpi_id | fields itsi_kpi_id, service_name ]
+| timechart limit=30 span=$span$ $stat_op$(alert_value) by service_name</query>
+          <!--query>index=itsi_summary [| `service_kpi_list` | search (service_name="$svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | format ] AND (entity_title=service_aggregate)
+| join kpiid, serviceid [|`service_kpi_list` ]
+| eval  series = service_name." ".kpi
+| timechart span=$span$ $stat_op$(alert_value) by series</query-->
+          <earliest>$time_sel.earliest$</earliest>
+          <latest>$time_sel.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Service Aggregate Values (AD - Trending Only)</title>
+      <chart>
+        <title>Look for repeating patterns that indicate adaptive could work</title>
+        <search>
+          <query>| mstats $stat_op$(alert_value) prestats=t where index=itsi_summary_metrics [| `service_kpi_list` | search (service_name="$sel_svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | rename kpiid as itsi_kpi_id | format ] AND (entity_title="service_aggregate")
+BY entity_title span=$span$
+| timechart span=$span$ $stat_op$(alert_value)</query>
+          <!--query>index=itsi_summary [| `service_kpi_list` | search (service_name="$svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | format ] AND (entity_title=service_aggregate)
+| join kpiid, serviceid [|`service_kpi_list` ]
+| eval  series = service_name." ".kpi
+| timechart span=$span$ $stat_op$(alert_value) by series</query-->
+          <earliest>$time_sel.earliest$</earliest>
+          <latest>$time_sel.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Count of Metrics</title>
+      <chart>
+        <title>Are there enough data points available?  The more data points in a given period the better the thresholding</title>
+        <search>
+          <!--query>index=itsi_summary is_service_aggregate=1 is_service_max_severity_event=1 [| `service_kpi_list` | search (service_name="$svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | format ]
+| join kpiid, serviceid [|`service_kpi_list` ]
+| timechart span=$span$ count</query-->
+          <query>| mstats count(alert_value) prestats=f span=$span$ where index=itsi_summary_metrics [| `service_kpi_list` | search (service_name="$sel_svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | rename kpiid as itsi_kpi_id | format ] by entity_title
+| timechart span=$span$ dc(entity_title)</query>
+          <earliest>$time_sel.earliest$</earliest>
+          <latest>$time_sel.latest$</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Entity Values (AD - Cohesive Only)</title>
+      <chart>
+        <title>What static thresholds can be set, if any?  Do the entities show similar values?  If not should they be sub-grouped into different services?</title>
+        <search>
+          <!--query>index=itsi_summary [| `service_kpi_list` | search (service_name="$svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | format ] AND (entity_title!=service_aggregate)
+| join kpiid, serviceid [|`service_kpi_list` ]
+| timechart limit=10 span=$span$ $stat_op$(alert_value) by entity_title</query-->
+          <query>| mstats $stat_op$(alert_value) prestats=t where index=itsi_summary_metrics [| `service_kpi_list` | search (service_name="$sel_svc$") AND (kpi_name="$sel_kpi$") | fields kpiid | rename kpiid as itsi_kpi_id | format ] AND (entity_title!="service_aggregate")
+BY entity_title span=$span$
+| timechart limit=20 span=$span$ $stat_op$(alert_value) by entity_title</query>
+          <earliest>$time_sel.earliest$</earliest>
+          <latest>$time_sel.latest$</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+</form>

@@ -1,0 +1,135 @@
+<form>
+  <label>KPI Search Performance</label>
+  <description>How are the KPI searches running and which ones need optimisation</description>
+  <search id="introspection_hosts">
+    <query>index=_introspection | stats count by host</query>
+    <earliest>-1h</earliest>
+    <latest>now</latest>
+  </search>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>-4h@m</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>Click a search and view its performance over time.  If its a base search you'll get some other info about the services it supports etc..</title>
+      <table>
+        <title>KPI Performance from ITSI Health Check - select a search to review its recent performance</title>
+        <search>
+          <query>index=_internal sourcetype=scheduler savedsearch_name="Indicator*"
+            | stats count as run_count, count(eval(status!="success" AND status!="delegated_remote" AND status!="delegated_remote_completion")) as failed_count, count(eval(suppressed!="0")) as suppressed_count,
+            avg(run_time) as avg_runtime, max(run_time) as max_runtime, earliest(_time) as first, latest(_time) as last
+            by savedsearch_name
+            | eval KPI_search_type=if(savedsearch_name like "%Shared%", "base", "ad hoc")
+            | eval runtime_headroom_pct=round((100-(max_runtime/((last-first)/(run_count-1))*100)),1)
+            | eval avg_runtime=round(avg_runtime, 2)
+            | eval max_runtime=round(max_runtime, 2)
+            | table savedsearch_name KPI_search_type failed_count suppressed_count runtime_headroom_pct avg_runtime max_runtime run_count
+            | sort +runtime_headroom_pct
+            | rex field=savedsearch_name "(?&lt;search_guid&gt;[\S]+) - ITSI Search$"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+        <format type="color" field="runtime_headroom_pct">
+          <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
+          <scale type="threshold">25,50</scale>
+        </format>
+        <format type="color" field="failed_count">
+          <colorPalette type="list">[#65A637,#D93F3C]</colorPalette>
+          <scale type="threshold">1</scale>
+        </format>
+        <format type="color" field="suppressed_count">
+          <colorPalette type="list">[#65A637,#F7BC38]</colorPalette>
+          <scale type="threshold">1</scale>
+        </format>
+        <format type="color" field="KPI_search_type">
+          <colorPalette type="map">{"ad hoc":#F1813F,"base":#53A051,"data model":#DC4E41}</colorPalette>
+        </format>
+        <format type="color" field="max_runtime">
+          <colorPalette type="minMidMax" maxColor="#DC4E41" midColor="#F8BE34" minColor="#53A051"></colorPalette>
+          <scale type="minMidMax" midValue="25"></scale>
+        </format>
+        <format type="color" field="avg_runtime">
+          <colorPalette type="minMidMax" maxColor="#DC4E41" midColor="#F8BE34" minColor="#53A051"></colorPalette>
+          <scale type="minMidMax" midValue="25"></scale>
+        </format>
+        <drilldown>
+          <set token="search_guid">$row.search_guid$</set>
+          <set token="savedsearch_name">$row.savedsearch_name$</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$savedsearch_name$">
+      <title>Successful search performance $savedsearch_name$</title>
+      <chart>
+        <search>
+          <query>index=_internal savedsearch_name="*$search_guid$*" app=itsi component=SavedSplunker status=success | timechart span=5m max(run_time) as max, avg(run_time) as avg, p90(run_time) as 90pct</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">Avg Runtime (seconds)</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$savedsearch_name$">
+      <title>Service and KPI breakdown</title>
+      <table>
+        <search>
+          <query>| `service_kpi_list` |  search
+    [| search index=itsi_summary "$savedsearch_name$"
+| dedup kpiid
+| fields kpiid
+    | format]
+|  fields *name
+| sort service_name, kpi_name</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+    <panel depends="$savedsearch_name$">
+      <title>Base Search Details</title>
+      <table>
+        <search>
+          <query>| rest report_as=text splunk_server=local /servicesNS/nobody/SA-ITOA/itoa_interface/kpi_base_search/$search_guid$ fields="*"
+| spath input=value output="A Title" path=title
+| spath input=value output="Base Search" path=base_search
+| spath input=value output="Owner" path=acl.owner
+| spath input=value output="Time - Window" path=search_alert_earliest
+| spath input=value output="Updated at" path=mod_timestamp
+| spath input=value output="Entities - Filter" path=is_service_entity_filter
+| spath input=value output="Time - Schedule" path=alert_period
+| spath input=value output="Entities - Split" path=is_entity_breakdown
+| spath input=value output="Time - Lag" path=alert_lag
+| fields - value splunk_server
+
+| transpose | rename column as Field, "row 1" as Value</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+      </table>
+    </panel>
+  </row>
+</form>

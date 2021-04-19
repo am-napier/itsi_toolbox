@@ -1,0 +1,96 @@
+<form>
+  <label>Saved Search Review</label>
+  <description>Which searches are the slowest</description>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>-4h@m</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <html>
+        <ul>
+    <li>Goals</li>
+    <ul>
+      <li>How many?</li>
+      <li>How big?</li>
+      <li>How evenly are they distributed?</li>
+      <li>...</li>
+      <li>..</li>
+    </ul>
+  </ul>
+      </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Click a search to see its performance over time, we expect to see these fairly consistent over time, ie big DMAs or peak overloaded indexers will impact search times.</title>
+      <input type="text" token="correlation_search_pattern" searchWhenChanged="true">
+        <label>Saved Search Name Pattern</label>
+        <default>*</default>
+        <initialValue>*</initialValue>
+      </input>
+      <table>
+        <title>Correlation Search Performance ("runtime_headroom" is (100 - runtime / scheduled interval); for a search scheduled to run every 60sec, with a runtime of 45sec, runtime_headroom_pct = 25.  100 is good, 0 is bad)</title>
+        <search>
+          <query>index=_internal sourcetype=scheduler savedsearch_name="$correlation_search_pattern$" savedsearch_name!="Indicator*"
+            | stats count as run_count, count(eval(status!="success" AND status!="delegated_remote" AND status!="delegated_remote_completion")) as failed_count, count(eval(suppressed!="0")) as suppressed_count,
+            avg(run_time) as avg_runtime, max(run_time) as max_runtime, earliest(_time) as first, latest(_time) as last
+            by savedsearch_name
+            | eval KPI_search_type=if(savedsearch_name like "%Shared%", "base", "ad hoc")
+            | eval runtime_headroom_pct=round((100-(max_runtime/((last-first)/(run_count-1))*100)),1)
+            | eval avg_runtime=round(avg_runtime, 2)
+            | eval max_runtime=round(max_runtime, 2)
+            | table savedsearch_name KPI_search_type failed_count suppressed_count runtime_headroom_pct avg_runtime max_runtime run_count
+            | sort +runtime_headroom_pct
+            | rex field=savedsearch_name "(?&lt;search_guid&gt;[\S]+) - ITSI Search$"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="count">10</option>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+        <format type="color" field="runtime_headroom_pct">
+          <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
+          <scale type="threshold">25,50</scale>
+        </format>
+        <format type="color" field="failed_count">
+          <colorPalette type="list">[#65A637,#D93F3C]</colorPalette>
+          <scale type="threshold">1</scale>
+        </format>
+        <format type="color" field="suppressed_count">
+          <colorPalette type="list">[#65A637,#F7BC38]</colorPalette>
+          <scale type="threshold">1</scale>
+        </format>
+        <drilldown>
+          <set token="cs_search_guid">$row.search_guid$</set>
+          <set token="correlation_search_name">$row.savedsearch_name$</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel depends="$correlation_search_name$">
+      <title>Successful search performance $correlation_search_name$</title>
+      <chart>
+        <search>
+          <query>index=_internal savedsearch_name="$correlation_search_name$" app=itsi component=SavedSplunker status=success | timechart span=5m max(run_time) as max, avg(run_time) as avg, p90(run_time) as 90pct</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">Avg Runtime (seconds)</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+</form>
