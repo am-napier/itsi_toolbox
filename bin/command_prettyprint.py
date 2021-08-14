@@ -7,8 +7,7 @@ import json
 
 
 
-def get_bool(b):
-    return str(b).lower in ["true", "t", 1, "yes", "ok"]
+
 
 @Configuration()
 class PrettyPrintCommand(StreamingCommand):

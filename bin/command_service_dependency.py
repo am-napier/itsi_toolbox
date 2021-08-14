@@ -6,56 +6,46 @@ from splunklib.client import Endpoint
 
 import json
 import time
+from itsi_kvstore import KVStoreHelper
 import copy
 from perf import Perf
 
+#DEF_FIELDS = "time_variate_thresholds,adaptive_thresholds_is_enabled,adaptive_thresholding_training_window," \
+#             "kpi_threshold_template_id,tz_offset"
 
-DEF_FIELDS = "time_variate_thresholds,adaptive_thresholds_is_enabled,adaptive_thresholding_training_window," \
-           "kpi_threshold_template_id,tz_offset"
 
 def get_bool(b):
     return str(b).lower in ["true", "t", 1, "yes", "ok", "indeed-illy do!"]
 
+
 @Configuration()
-class AdaptiveThresholdCommand(StreamingCommand):
+class ServiceDependencyCommand(StreamingCommand):
     """
-        Set the adaptive threshold re-calculation to either on or off
-        Allows the linking/unlinking of the threshold template
-        What happens with the service template link ?-O
-        Can we do this on the template too?  Seems to be the same set of properties
+    eval parent_id=xxx, child_id=yyy kpi_id=zzz urgency=7 | servicedependency mode=add
     """
+
     opt_mode = Option(
         doc='''
         **Syntax:** **mode=***string*
-        **Description:** one of read, write or thresholds coming
-        **Default:** read''',
+        **Description:** one of add or remove
+        **Default:** add''',
         name='mode',
-        require=False,
-        default="read")
+        require=True,
+        default="add")
 
-    opt_format = Option(
+    def_urgency = Option(
         doc='''
-        **Syntax:** **format=***string*
-        **Description:** applies to mode=read, Determines output from the command.  Specify either flat or json
-        **Default:** json''',
-        name='format',
+        **Syntax:** **default_urgency=***int*
+        **Description:** value between 0 and 11
+        **Default:** 5''',
+        name='default_urgency',
         require=False,
-        default="json")
-
-
-    opt_fields = Option(
-        doc='''
-        **Syntax:** **fields=***string*
-        **Description:** applies to mode=read, CSV list of fields to return
-        **Default:** time_variate_thresholds,adaptive_thresholds_is_enabled,adaptive_thresholding_training_window,"
-                "kpi_threshold_template_id,tz_offset''',
-        name='fields',
-        require=False,
-        default=DEF_FIELDS)
+        default=5,
+        validate=validators.Integer())
 
     # region Command implementation
     def __init__(self):
-        super(AdaptiveThresholdCommand, self).__init__()
+        super(ServiceDependencyCommand, self).__init__()
 
 
     def prepare(self):
@@ -67,148 +57,210 @@ class AdaptiveThresholdCommand(StreamingCommand):
         :param records: An iterable stream of events from the command pipeline.
         :return: `None`.
 
-        read: eval service_id=xxx kpi_id=yyy | adaptivethresholds format=<flat|json> mode=read [fields="adaptive_thresholds_is_enabled"]
-        write: eval service_id=xxx kpi_id=yyy enabled=<true|false> | adaptivethresholds mode=write
-
-        time_variate_thresholds
-        adaptive_thresholds_is_enabled
-        adaptive_thresholding_training_window
-        kpi_threshold_template_id
-        title
-        _key
-
-        First get a copy of the service config.  We have to change just a part but partial updates do not work on
-        attributes that are 2nd or greater level deep so the whole JSON block must be writen back.
-
+        add/update : parent=xxx, child=yyy, kpiid=zzz, urgency=0-11 | servicedependency mode=add
+        remove: parent=xxx, child=yyy, kpiid=zzz  | servicedependency mode=remove
         """
-        self.logger.info('ToggleAdaptiveThreshold Entering stream.')
+        self.logger.info('Service Dependency Command entering stream.')
         t1 = time.time()
         mode = self.opt_mode.lower()
-        is_write = mode == "write"
-        is_read = mode == "read"
-        is_reset = mode == "reset"
 
-        if not (is_read or is_write or is_reset):
-            self.logger.error("unsupported mode, only read or write supported")
+        if not mode in ['add', "remove"]:
+            self.logger.error("unsupported mode, only add or remove are supported")
             return
 
         # Put your event transformation code here
-        helper = AdaptiveThresholdHelper(self)
+        helper = ServiceDependencyHelper(self)
         for record in records:
             # delete this before production
             self.logger.info('Stream Record {0}'.format(record))
             t2 = time.time()
-            service_id = record.get('serviceid')
-            kpi_id = record.get('kpiid')
 
-            if is_read:
-                helper.do_read(service_id, kpi_id, record)
-            elif is_write:
-                helper.do_update(service_id, kpi_id, record)
-            elif is_reset:
-                helper.do_reset(service_id, kpi_id, record)
+            if mode == 'add':
+                helper.do_add(record)
+            else:
+                helper.do_remove(record)
 
-            self.logger.info("{} complete in {} secs".format(mode, time.time()-t2))
+            self.logger.info("{} complete in {} secs".format(mode, time.time() - t2))
             yield record
-        if is_write or is_reset:
-            helper.write_cache()
+
         self.logger.info("Full update time is:{}".format(time.time() - t1))
 
     # endregion
 
-class AdaptiveThresholdHelper(object):
+
+class ServiceDependencyHelper(object):
 
     def __init__(self, command):
-        self._svc_map = {}
-        self.endpoint = Endpoint(command.service, '/servicesNS/nobody/SA-ITOA/itoa_interface/vLatest/service')
         self.logger = command.logger
-        self.opt_mode = command.opt_mode
-        self.opt_format = command.opt_format
-        self.opt_fields = command.opt_fields
+        self.def_urgency = command.def_urgency
+        self.kvstore = KVStoreHelper(command)
+        self.PARENT_LINKS = "services_depends_on"
+        self.CHILD_LINKS = "services_depending_on_me"
+        self.KPI_LIST = "kpis_depending_on"
+        self.URGENCY_LIST = "overloaded_urgencies"
 
 
-    def do_read(self, service_id, kpi_id, record):
-        '''
-        read the config strip the key attributes and add them to record then return
-        '''
-        svc = self.read_service(service_id)
-        props = self.opt_fields.split(",")
-        is_flat = self.opt_format == "flat"
-        pre = "response." if is_flat else ""
-        self.logger.info("DO READ: is_flat:{}, props:{}".format(is_flat,props))
-        for kpi in svc['kpis']:
-            if kpi['_key'] == kpi_id:
-                self.logger.info("kpi found")
-                resp = dict([(pre+p, kpi[p]) for p in props])
+    def insert_or_update_links(self, object, tag, svc_id, kpi_id, urgency=None):
+        """
+        This method is inserting or updating the required bits of the link config in object
+        Similar link config is used in the parent and the child, the main difference is the parent
+        might have overloaded_urgencies object if the defaults are not used.
+        Defaults are 5 for KPIs and 11 for health scores
 
-                if is_flat:
-                    record.update(resp)
-                else:
-                    record['response'] = json.dumps(resp)
-                break
+        Params:
+            object (dict) is a service config
+            tag (string) is the name of the link config object being updated.  Value is:
+                services_depends_on - if object is the parent end of the link
+                services_depending_on_me - if object is the child end of the link
+            svc_id (string) is the service being linked to
+            kpi_id (string) is the id of the kpi in the service being linked to
+            urgency (int) is value to insert in overloaded_urgencies (if provided)
+        returns:
+            the new or modified link object
 
-
-    def do_update(self, service_id, kpi_id, record):
-        enabled = get_bool(record.get('enabled', ""))
-        '''
-        for write we need to update adaptive_thresholds_is_enabled and since we are changing a template we unlink it 
-        from kpi_thresholding_template_id.  Store the orig values for posterity and to allow a reset if needed.
-        '''
-        svc = self.read_service(service_id)
-        for kpi in svc['kpis']:
-            if kpi['_key'] == kpi_id:
-                if not 'adaptive_orig_settings' in kpi:
-                    # provide an undo state
-                    kpi['adaptive_orig_settings'] = {
-                        'adaptive_thresholds_is_enabled': kpi['adaptive_thresholds_is_enabled'],
-                        'kpi_threshold_template_id': kpi['kpi_threshold_template_id']
+        Object structures look like this:
+            from the parent point down at the child
+                 "services_depends_on" : [
+                    {
+                        "serviceid":svc_id
+                        "kpis_depending_on":[kpi_id, ...]
+                        "overloaded_urgencies": {id:int, ...}
                     }
-                kpi['adaptive_thresholds_is_enabled'] = 1 if enabled else 0
-                kpi['kpi_threshold_template_id'] = ''
+                ]
+            from the child pointing at the parent
+                 "services_depending_on_me" : [
+                    {
+                        "servcieid": svc_id,
+                        "kpis_depending_on": [kpi_id, ...]
+                    }
+                 ]
+        """
 
+        # first create the array called tag in object if it doesn't exist, I've seen this in some cases
+        if not tag in object:
+            object[tag] = []
+        # create a default link object
+        default_link = {"serviceid": svc_id, self.KPI_LIST: []}
+        # next get the link object from object for svc_id, or use the default
+        link = next((item for item in object[tag] if item['serviceid'] == svc_id), default_link)
+        # add it to the array if its not there
+        if link not in object[tag]:
+            object[tag].append(link)
+        """add the kpi to the links object if its not there"""
+        if kpi_id not in link[self.KPI_LIST]:
+            link[self.KPI_LIST].append(kpi_id)
+        """update urgency if provided, should only happen for the parent node"""
+        if urgency is not None:
+            if not self.URGENCY_LIST in link:
+                link[self.URGENCY_LIST] = {}
+            link[self.URGENCY_LIST][kpi_id] = urgency
+        # return is for testing only
+        return link
 
-    def do_reset(self, service_id, kpi_id, record):
-        '''
-        copy the values from the orig settings back, if they are there
-        using pop also deletes the orig object
-        '''
-        svc = self.read_service(service_id)
-        for kpi in svc['kpis']:
-            if kpi['_key'] == kpi_id:
-                kpi.update(kpi.pop('adaptive_orig_settings', {}))
+    def do_add(self, record, dry_run=False):
+        """
 
+        """
+        parent_id = record.get("parent", None)
+        child_id = record.get("child", None)
+        kpi_id = record.get('kpiid', None)
+        if None in [parent_id, child_id, kpi_id]:
+            raise RuntimeError("Missing required fields parent:{}, child:{}, kpi:{}".format(parent_id, child_id, kpi_id))
+        parent = self.kvstore.read_object(parent_id)
+        child = self.kvstore.read_object(child_id)
+        urgency = record.get('urgency', self.def_urgency)
 
-    def write_cache(self):
+        self.logger.info("DO ADD: parent:{}, child:{}, kpi:{} urgency:{}".format(parent_id, child_id, kpi_id, urgency))
+        parent_links = self.insert_or_update_links(parent, self.PARENT_LINKS, child_id, kpi_id, urgency)
+        child_links = self.insert_or_update_links(child, self.CHILD_LINKS, parent_id, kpi_id)
+        self.logger.info("Linking parent {} to child {} with parent-cfg:{} child-cfg:{}".format(parent_id, child_id,
+                                json.dumps(parent_links, indent=2), json.dumps(child_links, indent=2)))
+        payload = [
+            {
+                "_key" : parent_id,
+                "object_type":"service",
+                "title" : parent["title"],
+                self.PARENT_LINKS: parent[self.PARENT_LINKS]
+            },
+            {
+                "_key": child_id,
+                "object_type": "service",
+                "title": child["title"],
+                self.CHILD_LINKS: child[self.CHILD_LINKS]
+            }
+        ]
+        if not dry_run:
+            resp = self.kvstore.write_bulk(json.dumps(payload))
 
-        if len(self._svc_map) == 0:
-            self.logger.info("Cache is empty, no writes to do.")
-            return
-        for id in self._svc_map:
-            cfg = self._svc_map[id]
-            query = {"body": json.dumps(cfg)}
-            resp = self.endpoint.post(id, **query)
-            if resp and resp['status'] > 299:
-                self.logger.error("Failed writing service with id {} returned status {}".format(id))
-                self.logger.error("Status {}".format(resp['status']))
-                self.logger.error("Body {}".format(resp['body'].read()))
-                raise Exception("write service failed, check logs")
-            self.logger.info("update completed for svc:{} id:{}".format(cfg['title'], id))
+        return payload
+        # write the new services
 
+    def remove_links(self, links, svc_id, kpi_id):
+        """
+        object is an array of dict one per service.
+            [
+                {
+                    "serviceid":svc_id
+                    "kpis_depending_on":[kpi_id, ...]
+                    "overloaded_urgencies": {id:int, ...} # optional, might not be there
+                },
+                { ... }
+            ]
+        """
+        # find the one for svc_id
+        svc_link = next((link for link in links if link['serviceid'] == svc_id and kpi_id in link[self.KPI_LIST]), None)
+        try:
+            svc_link[self.KPI_LIST].remove(kpi_id)
+            if self.URGENCY_LIST in svc_link:
+                svc_link[self.URGENCY_LIST].pop(kpi_id, None)
+            # if this was the only item in the list remove the link object
+            if len(svc_link[self.KPI_LIST])==0:
+                links.remove(svc_link)
+        except Exception as e:
+            self.logger.warn("Error in remove links, please forgive crappy message... {} ".format(e))
+            """fail the update because we can't complete with a partial set"""
+            raise e
 
-    def read_service(self, svc):
-        if svc in self._svc_map:
-            self.logger.debug("read_service cache hit")
-            return self._svc_map[svc]
-        else:
-            self.logger.debug("read_service cache miss")
-            resp = self.endpoint.get(svc)
-            if resp and resp['status'] < 300:
-                self._svc_map[svc] = json.loads(resp['body'].read())
-                return self._svc_map[svc]
+    def do_remove(self, record, dry_run=False):
+        """
+        This method is removing the link between two services
+        See do_add for example structures
 
-        self.logger.error("Reading service with id {} returned status {}".format(svc, resp['status']))
-        self.logger.error("Body {}".format(resp['body'].read()))
-        raise Exception("read service failed, check logs")
+        Params:
+            record (dict) is a map of values from the row in the search bar
+        returns:
+            ??
+        """
+        parent_id = record.get("parent", None)
+        child_id = record.get("child", None)
+        kpi_id = record.get('kpiid', None)
+        if None in [parent_id, child_id, kpi_id]:
+            raise RuntimeError(
+                "Missing required fields parent:{}, child:{}, kpi:{}".format(parent_id, child_id, kpi_id))
+        parent = self.kvstore.read_object(parent_id)
+        child = self.kvstore.read_object(child_id)
+        self.logger.info("DO REMOVE: parent:{}, child:{}, kpi:{} ".format(parent_id, child_id, kpi_id))
+        self.remove_links(parent[self.PARENT_LINKS], child_id, kpi_id)
+        self.remove_links(child[self.CHILD_LINKS], parent_id, kpi_id)
+
+        payload = [
+            {
+                "_key": parent_id,
+                "object_type": "service",
+                "title": parent["title"],
+                self.PARENT_LINKS: parent[self.PARENT_LINKS]
+            },
+            {
+                "_key": child_id,
+                "object_type": "service",
+                "title": child["title"],
+                self.CHILD_LINKS: child[self.CHILD_LINKS]
+            }
+        ]
+        if not dry_run:
+            resp = self.kvstore.write_bulk(json.dumps(payload))
+
+        return payload
 
 if __name__ == '__main__':
-    dispatch(AdaptiveThresholdCommand, module_name=__name__)
+    dispatch(ServiceDependencyCommand, module_name=__name__)

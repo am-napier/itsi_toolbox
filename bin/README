@@ -6,3 +6,15 @@ Add command to enable/disable AT per KPI/Service
 Dashboards:
 AT Analytics on metrics index
 Add the KPI/CS search performance dashboards
+
+TODO commands
+Add/remove and list service tags
+Search for info based on tags
+
+Maintenance calendar management
+
+Service/KPI name changes
+
+Entity Update for status/environment etc.
+
+Update Static Entity Thresholds

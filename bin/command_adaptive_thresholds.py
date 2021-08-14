@@ -98,8 +98,8 @@ class AdaptiveThresholdCommand(StreamingCommand):
             # delete this before production
             self.logger.info('Stream Record {0}'.format(record))
             t2 = time.time()
-            service_id = record.get('service_id')
-            kpi_id = record.get('kpi_id')
+            service_id = record.get('serviceid')
+            kpi_id = record.get('kpiid')
 
             if is_read:
                 helper.do_read(service_id, kpi_id, record)
@@ -114,7 +114,6 @@ class AdaptiveThresholdCommand(StreamingCommand):
             helper.write_cache()
         self.logger.info("Full update time is:{}".format(time.time() - t1))
 
-    # endregion
 
 class AdaptiveThresholdHelper(object):
 
