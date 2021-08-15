@@ -81,5 +81,11 @@ Example:
     | eval break="t", severity=1, status=5
     | episodeupdate```
 
+## prettyprint
+Try this out
+
+    ```| rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/service/<service_id>
+    | prettyprint fields=value```
+
 ## Dashboards
 _TBC_
