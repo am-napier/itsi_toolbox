@@ -13,6 +13,39 @@ from perf import Perf
 #DEF_FIELDS = "time_variate_thresholds,adaptive_thresholds_is_enabled,adaptive_thresholding_training_window," \
 #             "kpi_threshold_template_id,tz_offset"
 
+"""
+Useful testing searches
+
+# find and display all the dependency links for the services being linked/unlinked
+
+| rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/service/ fields="services_depends_on,services_depending_on_me,title"
+| eval svc=spath(value, "{}")
+| mvexpand svc
+| fields - value
+| eval children="[".mvjoin(spath(svc, "services_depends_on{}"), ",")."]", parents="[".mvjoin(spath(svc, "services_depending_on_me{}"), ",")."]", title=spath(svc, "title")
+| search title IN (A_Tes*)
+| prettyprint fields="children,parents"
+| fields title, parents, children, svcx
+
+``` 
+ add service dependencies for named KPIs (custom_1,custom_2) AND SHS via appendpipe
+ note the streamstats hack to set urgency to a max of 11
+ swap mode=add to mode=remove to clear them out again
+```
+| makeresults 
+| eval parent_name="A_Test_One", child_name=split("A_Test_Two,A_Test_Three,A_Test_Four", ","), kpi_name=split("custom_1,custom_2",",")
+| mvexpand child_name
+| mvexpand kpi_name
+``` get the child IDs```
+| join child_name,kpi_name [|`service_kpi_list` | rename service_name as child_name, serviceid as child ]
+``` get the parent IDs ```
+| lookup service_kpi_lookup title as parent_name OUTPUT _key as parent
+``` add SHS too```
+| appendpipe [| dedup parent, child | fields - kpiid]
+| streamstats window=11 count as urgency
+| servicedependency mode="add"
+
+"""
 
 def get_bool(b):
     return str(b).lower in ["true", "t", 1, "yes", "ok", "indeed-illy do!"]
@@ -21,7 +54,7 @@ def get_bool(b):
 @Configuration()
 class ServiceDependencyCommand(StreamingCommand):
     """
-    eval parent_id=xxx, child_id=yyy kpi_id=zzz urgency=7 | servicedependency mode=add
+    eval parent=xxx, child=yyy kpiid=zzz urgency=7 | servicedependency mode=add
     """
 
     opt_mode = Option(
@@ -75,10 +108,13 @@ class ServiceDependencyCommand(StreamingCommand):
             self.logger.info('Stream Record {0}'.format(record))
             t2 = time.time()
 
-            if mode == 'add':
-                helper.do_add(record)
-            else:
-                helper.do_remove(record)
+            try:
+                if mode == 'add':
+                    helper.do_add(record)
+                else:
+                    helper.do_remove(record)
+            except Exception as e:
+                record["ErrorMessage"] = "Error, check KPI is a valid dependency, message was: %s " % str(e)
 
             self.logger.info("{} complete in {} secs".format(mode, time.time() - t2))
             yield record
@@ -159,13 +195,14 @@ class ServiceDependencyHelper(object):
 
     def do_add(self, record, dry_run=False):
         """
-
         """
         parent_id = record.get("parent", None)
         child_id = record.get("child", None)
-        kpi_id = record.get('kpiid', None)
+        kpi_id = record.get('kpiid', "")
+        if "" == kpi_id:
+            kpi_id = "SHKPI-%s" % child_id
         if None in [parent_id, child_id, kpi_id]:
-            raise RuntimeError("Missing required fields parent:{}, child:{}, kpi:{}".format(parent_id, child_id, kpi_id))
+            raise RuntimeError("Missing required fields parent:{}, child:{}, optional (kpi:{})".format(parent_id, child_id, kpi_id))
         parent = self.kvstore.read_object(parent_id)
         child = self.kvstore.read_object(child_id)
         urgency = record.get('urgency', self.def_urgency)
@@ -233,12 +270,15 @@ class ServiceDependencyHelper(object):
         """
         parent_id = record.get("parent", None)
         child_id = record.get("child", None)
-        kpi_id = record.get('kpiid', None)
-        if None in [parent_id, child_id, kpi_id]:
+        kpi_id = record.get('kpiid', "")
+        if "" == kpi_id:
+            kpi_id = "SHKPI-%s" % child_id
+        if None in [parent_id, child_id]:
             raise RuntimeError(
-                "Missing required fields parent:{}, child:{}, kpi:{}".format(parent_id, child_id, kpi_id))
+                "Missing required fields parent:{}, child:{}, optional (kpi:{})".format(parent_id, child_id, kpi_id))
         parent = self.kvstore.read_object(parent_id)
         child = self.kvstore.read_object(child_id)
+
         self.logger.info("DO REMOVE: parent:{}, child:{}, kpi:{} ".format(parent_id, child_id, kpi_id))
         self.remove_links(parent[self.PARENT_LINKS], child_id, kpi_id)
         self.remove_links(child[self.CHILD_LINKS], parent_id, kpi_id)

@@ -42,12 +42,16 @@ class TestServiceDependencies(unittest.TestCase):
         self.cmd = TestCommand()
         self.kvstore = KVStoreHelper(self.cmd)
         self.to = TestObjects(self.cmd)
-        self.test_svcs = {
-            "a1": self.to.get_test_svc("test_a", "A One")
-            ,"a2": self.to.get_test_svc("test_a", "A Two")
-            ,"a3": self.to.get_test_svc("test_a", "A Three")
-            ,"a4": self.to.get_test_svc("test_a", "A Four")
-        }
+        try:
+            self.test_svcs = {
+                "a1": self.to.get_test_svc("test_a", "A_Test_One")
+                ,"a2": self.to.get_test_svc("test_a", "A_Test_Two")
+                ,"a3": self.to.get_test_svc("test_c", "A_Test_Three")
+                ,"a4": self.to.get_test_svc("test_c", "A_Test_Four")
+            }
+        except Exception as e:
+            logging.getLogger("TestServiceDependencies-setup").error("Setup failed: ", e)
+            print "Error is setup is : {}".format(e)
 
     def tearDown(self):
         pass
