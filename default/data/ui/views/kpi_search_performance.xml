@@ -6,7 +6,6 @@
     <earliest>-1h</earliest>
     <latest>now</latest>
   </search>
-
   <fieldset submitButton="false" autoRun="true">
     <input type="time" token="field1">
       <label></label>
@@ -18,41 +17,68 @@
   </fieldset>
   <row>
     <panel>
+      <table>
+        <title>Key Collections</title>
+        <search>
+          <query>| rest splunk_server=local /services/server/introspection/kvstore/collectionstats
+            | mvexpand data
+            | spath input=data
+            | rex field=ns "(?&lt;App&gt;.*)\.(?&lt;Collection&gt;.*)"
+            | search Collection IN (itsi_services itsi_refresh_queue) 
+            | eval dbsize=size/1024/1024
+            | eval indexsize=totalIndexSize/1024/1024
+            | stats first(count) AS "Number of Objects" first(nindexes) AS Accelerations first(indexsize) AS "accel_mb" first(dbsize) AS "coll_mb" by App,Collection
+            | sort - "Number of Objects"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <format type="color" field="failed">
+          <colorPalette type="list">[#65A637,#D93F3C]</colorPalette>
+          <scale type="threshold">1</scale>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
       <title>Click a search and view its performance over time.  If its a base search you'll get some other info about the services it supports etc..</title>
       <table>
         <title>KPI Performance from ITSI Health Check - select a search to review its recent performance</title>
         <search>
           <query>index=_internal sourcetype=scheduler savedsearch_name="Indicator*"
-            | stats count as run_count, count(eval(status!="success" AND status!="delegated_remote" AND status!="delegated_remote_completion")) as failed_count, count(eval(suppressed!="0")) as suppressed_count,
+            | stats count as runs, count(eval(status!="success" AND status!="delegated_remote" AND status!="delegated_remote_completion")) as failed, count(eval(suppressed!="0")) as suppressed,
             avg(run_time) as avg_runtime, max(run_time) as max_runtime, earliest(_time) as first, latest(_time) as last
             by savedsearch_name
             | eval KPI_search_type=if(savedsearch_name like "%Shared%", "base", "ad hoc")
-            | eval runtime_headroom_pct=round((100-(max_runtime/((last-first)/(run_count-1))*100)),1)
+            | eval runtime_headroom_pct=round((100-(max_runtime/((last-first)/(runs-1))*100)),1)
             | eval avg_runtime=round(avg_runtime, 2)
             | eval max_runtime=round(max_runtime, 2)
-            | table savedsearch_name KPI_search_type failed_count suppressed_count runtime_headroom_pct avg_runtime max_runtime run_count
+            | table savedsearch_name KPI_search_type failed suppressed runtime_headroom_pct avg_runtime max_runtime runs
             | sort +runtime_headroom_pct
-            | rex field=savedsearch_name "(?&lt;search_guid&gt;[\S]+) - ITSI Search$"</query>
+            | rex field=savedsearch_name "(?&lt;search_guid&gt;[\S]+) - ITSI Search$"
+            | join search_guid [| rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/kpi_base_search
+| eval value=spath(value, "{}") 
+| mvexpand value 
+| eval search_guid=spath(value, "_key"), title=spath(value, "title")
+| table search_guid, title]
+| eval title=coalesce(title, savedsearch_name)</query>
           <earliest>$field1.earliest$</earliest>
           <latest>$field1.latest$</latest>
         </search>
         <option name="count">10</option>
         <option name="drilldown">cell</option>
-        <option name="refresh.display">progressbar</option>
         <format type="color" field="runtime_headroom_pct">
           <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
           <scale type="threshold">25,50</scale>
         </format>
-        <format type="color" field="failed_count">
+        <format type="color" field="failed">
           <colorPalette type="list">[#65A637,#D93F3C]</colorPalette>
           <scale type="threshold">1</scale>
         </format>
-        <format type="color" field="suppressed_count">
+        <format type="color" field="suppressed">
           <colorPalette type="list">[#65A637,#F7BC38]</colorPalette>
           <scale type="threshold">1</scale>
-        </format>
-        <format type="color" field="KPI_search_type">
-          <colorPalette type="map">{"ad hoc":#F1813F,"base":#53A051,"data model":#DC4E41}</colorPalette>
         </format>
         <format type="color" field="max_runtime">
           <colorPalette type="minMidMax" maxColor="#DC4E41" midColor="#F8BE34" minColor="#53A051"></colorPalette>
@@ -62,19 +88,29 @@
           <colorPalette type="minMidMax" maxColor="#DC4E41" midColor="#F8BE34" minColor="#53A051"></colorPalette>
           <scale type="minMidMax" midValue="25"></scale>
         </format>
+        <fields>["title","runs","failed","suppressed","max_runtime","avg_runtime","runtime_headroom_pct","KPI_search_type"]</fields>
         <drilldown>
           <set token="search_guid">$row.search_guid$</set>
           <set token="savedsearch_name">$row.savedsearch_name$</set>
+          <set token="search_title">$row.title$</set>
         </drilldown>
       </table>
     </panel>
   </row>
-  <row>
-    <panel depends="$savedsearch_name$">
-      <title>Successful search performance $savedsearch_name$</title>
+  <row depends="$savedsearch_name$">
+    <panel>
+      <title>Successful search performance for KPI Search "$search_title$"</title>
+      <input type="dropdown" token="span">
+        <label>Span</label>
+        <choice value="1m">1m</choice>
+        <choice value="5m">5m</choice>
+        <choice value="30m">30m</choice>
+        <default>5m</default>
+        <initialValue>5m</initialValue>
+      </input>
       <chart>
         <search>
-          <query>index=_internal savedsearch_name="*$search_guid$*" app=itsi component=SavedSplunker status=success | timechart span=5m max(run_time) as max, avg(run_time) as avg, p90(run_time) as 90pct</query>
+          <query>index=_internal savedsearch_name="*$search_guid$*" app=itsi component=SavedSplunker status=success | timechart span=$span$ max(run_time) as max, avg(run_time) as avg, p90(run_time) as 90pct</query>
           <earliest>$field1.earliest$</earliest>
           <latest>$field1.latest$</latest>
         </search>
@@ -88,24 +124,92 @@
         <option name="refresh.display">progressbar</option>
       </chart>
     </panel>
+    <panel>
+      <title>Summary Records by KPI for "$savedsearch_name$"</title>
+      <chart>
+        <search>
+          <query>| tstats dc(indexed_itsi_kpi_id) as dc count where index=itsi_summary source="$savedsearch_name$" by indexed_itsi_service_id, _time span=$span$ 
+| timechart sum(count) as total_metrics span=$span$</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text"># records</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Entity Count "$savedsearch_name$"</title>
+      <chart>
+        <search>
+          <query>| mstats avg("alert_value") prestats=f WHERE "index"="itsi_summary_metrics" AND "kpi_base_search"="$search_guid$" span=$span$ by entity_title
+| timechart dc(entity_title) span=$span$</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">auto</option>
+        <option name="charting.axisY.includeZero">1</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">connect</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.fieldColors">{"Avg":"#1e93c6"}</option>
+        <option name="charting.fieldDashStyles">{"Avg":"Solid"}</option>
+        <option name="charting.gridLinesX.showMajorLines">1</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">seriesCompare</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
   </row>
   <row>
     <panel depends="$savedsearch_name$">
       <title>Service and KPI breakdown</title>
       <table>
         <search>
-          <query>| `service_kpi_list` |  search
-    [| search index=itsi_summary "$savedsearch_name$"
-| dedup kpiid
-| fields kpiid
-    | format]
-|  fields *name
-| sort service_name, kpi_name</query>
+          <query>| tstats count where index=itsi_summary source="$savedsearch_name$" by indexed_itsi_service_id, indexed_itsi_kpi_id 
+| rename indexed_itsi_service_id as serviceid, indexed_itsi_kpi_id as kpiid
+| join serviceid, kpiid [| `service_kpi_list`]
+| appendpipe [ | stats dc(kpiid) as num_kpis, dc(serviceid) as "num_services" | eval keep=1, service_name="*** All Services ***"]
+| appendpipe [ | where isnull(keep) | stats dc(kpiid) as num_kpis by service_name | eval keep=1, num_services="-"]
+| where keep=1
+| table service_name, num_services, num_kpis</query>
           <earliest>$field1.earliest$</earliest>
           <latest>$field1.latest$</latest>
         </search>
         <option name="count">10</option>
         <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
       </table>
     </panel>
     <panel depends="$savedsearch_name$">
