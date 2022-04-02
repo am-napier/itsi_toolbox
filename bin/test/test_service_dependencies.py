@@ -14,7 +14,7 @@ import logging
 from splunklib import client
 from bin.command_service_dependency import ServiceDependencyHelper
 from bin.itsi_kvstore import KVStoreHelper
-from test_objects import TestObjects
+from make_test_objects import MakeTestObjects
 
 # this has environment specific details like user name and pswd so its not committed in the repo
 import test_env as env
@@ -41,7 +41,7 @@ class TestServiceDependencies(unittest.TestCase):
     def setUp(self):
         self.cmd = TestCommand()
         self.kvstore = KVStoreHelper(self.cmd)
-        self.to = TestObjects(self.cmd)
+        self.to = MakeTestObjects(self.cmd)
         try:
             self.test_svcs = {
                 "a1": self.to.get_test_svc("test_a", "A_Test_One")

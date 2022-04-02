@@ -3,7 +3,7 @@ from bin.itsi_kvstore import KVStoreHelper
 
 
 
-class TestObjects(KVStoreHelper):
+class MakeTestObjects(KVStoreHelper):
     """Create config objects in the kvstore to help with testing"""
     def __init__(self, command, object_type="service", api="itoa_interface"):
         """command has both a service and logger object"""
