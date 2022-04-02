@@ -80,9 +80,12 @@ class KVStoreHelper(object):
 
     def create_object(self, body=None):
         params = {"body": json.dumps(body)}
-        resp = self.service.post(self.get_uri(), **params)
-        cfg = self.handle_response(resp, "create_object")
-
+        try:
+            resp = self.service.post(self.get_uri(), **params)
+            cfg = self.handle_response(resp, "create_object")
+        except Exception as e:
+            # failures to do this might mean the payload needs encoding
+            self.logger.error("Failed to create object, possible encoding ie % in the search? : {}".format(e))
         return cfg
 
     def delete_object(self, key):
