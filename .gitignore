@@ -4,6 +4,8 @@ bin/testing.py
 bin/README
 bin/test/test_env.py
 foo.txt
+metadata/local.meta
+.gitignore
 
 
 # User-specific stuff
