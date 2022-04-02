@@ -1,6 +1,0 @@
-A,B,C,D,E,F,expected
-A,B,C,D,xxx,yyy,12
-A,ends-B,xxx,here D is ,xxx,xxx,10
-A1,B,C,D,xxx,yyy,3
-A2,Bx,C,D,xxx,yyy,3
-XXX,xx,C,D,xxx,yyy,1

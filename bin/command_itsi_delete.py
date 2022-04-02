@@ -8,7 +8,7 @@ import json
 import time
 
 @Configuration()
-class DeleteObjectsCommand(StreamingCommand):
+class ItsiDeleteCommand(StreamingCommand):
 
     """
     Option not supported by the REST API so commented for now
@@ -76,7 +76,7 @@ class DeleteObjectsCommand(StreamingCommand):
 
 
     def __init__(self):
-        super(DeleteObjectsCommand, self).__init__()
+        super(ItsiDeleteCommand, self).__init__()
 
 
     def prepare(self):
@@ -158,4 +158,4 @@ class DeleteObjectsCommand(StreamingCommand):
 
 
 if __name__ == '__main__':
-    dispatch(DeleteObjectsCommand, module_name=__name__)
+    dispatch(ItsiDeleteCommand, module_name=__name__)

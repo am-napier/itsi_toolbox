@@ -20,7 +20,7 @@ import bin.splunklib.client
 '''
 
 
-class TestRMEntity(unittest.TestCase):
+class TestItsiDelete(unittest.TestCase):
 
 
     @classmethod
