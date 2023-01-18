@@ -2,22 +2,20 @@
 # coding=utf-8
 #
 from splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
-from splunklib.client import Endpoint
+#from splunklib.client import Endpoint
 
-import json
 import time
 from itsi_kvstore import KVStoreHelper
-import copy
-from perf import Perf
+
+
+#from perf import Perf
 
 #DEF_FIELDS = "time_variate_thresholds,adaptive_thresholds_is_enabled,adaptive_thresholding_training_window," \
 #             "kpi_threshold_template_id,tz_offset"
 
 """
 Useful testing searches
-
 # find and display all the dependency links for the services being linked/unlinked
-
 | rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/service/ fields="services_depends_on,services_depending_on_me,title"
 | eval svc=spath(value, "{}")
 | mvexpand svc
@@ -26,7 +24,6 @@ Useful testing searches
 | search title IN (A_Tes*)
 | prettyprint fields="children,parents"
 | fields title, parents, children, svcx
-
 ``` 
  add service dependencies for named KPIs (custom_1,custom_2) AND SHS via appendpipe
  note the streamstats hack to set urgency to a max of 11
@@ -44,11 +41,7 @@ Useful testing searches
 | appendpipe [| dedup parent, child | fields - kpiid]
 | streamstats window=11 count as urgency
 | servicedependency mode="add"
-
 """
-
-def get_bool(b):
-    return str(b).lower in ["true", "t", 1, "yes", "ok", "indeed-illy do!"]
 
 
 @Configuration()
@@ -62,10 +55,20 @@ class KpiUrgencyCommand(StreamingCommand):
         **Syntax:** **default_urgency=***int*
         **Description:** value between 0 and 11
         **Default:** 5''',
-        name='default_urgency',
+        name='default',
         require=False,
         default=5,
         validate=validators.Integer())
+
+    debug = Option(
+        doc='''
+        **Syntax:** **debug=***boolean*
+        **Description:** toggles extra debug in the output
+        **Default:** false''',
+        name='debug',
+        require=False,
+        default=False,
+        validate=validators.Boolean())
 
     # region Command implementation
     def __init__(self):
@@ -83,7 +86,6 @@ class KpiUrgencyCommand(StreamingCommand):
         """
         self.logger.info('KPI Urgency Command entering stream.')
         t1 = time.time()
-        mode = self.opt_mode.lower()
 
         # Put your event transformation code here
         helper = KpiUrgencyHelper(self)
@@ -93,11 +95,11 @@ class KpiUrgencyCommand(StreamingCommand):
             t2 = time.time()
 
             try:
-                helper.update(record)
+                record['new_kpi'] = helper.update(record)
             except Exception as e:
                 record["ErrorMessage"] = "Error, check Service and KPI ids, message was: %s " % str(e)
 
-            self.logger.info("{} complete in {} secs".format(mode, time.time() - t2))
+            self.logger.info("complete in {} secs".format(time.time() - t2))
             yield record
 
         self.logger.info("Full update time is:{}".format(time.time() - t1))
@@ -106,21 +108,23 @@ class KpiUrgencyCommand(StreamingCommand):
 
 
 class KpiUrgencyHelper(object):
-
+    """
+    This class is here to help with unit testing
+    """
     def __init__(self, command):
         self.logger = command.logger
         self.def_urgency = command.def_urgency
         self.kvstore = KVStoreHelper(command)
         self.KPIS = "kpis"
 
-    def update(self, record, dry_run=False):
+    def update(self, record):
 
-        service_id = record.get("service", None)
-        kpi_id = record.get('kpiid', "")
+        service_id = record.get("service_id", None)
+        kpi_id = record.get('kpi_id', "")
         if "" == kpi_id:
             kpi_id = "SHKPI-%s" % service_id
         if None in [service_id, kpi_id]:
-            raise RuntimeError("Missing required fields service:{}, optional (kpi:{})".format(service_id, kpi_id))
+            raise RuntimeError(f"Missing required fields service:{service_id}, optional (kpi:{kpi_id})")
         service = self.kvstore.read_object(service_id)
         urgency = record.get('urgency', self.def_urgency)
 
@@ -128,10 +132,8 @@ class KpiUrgencyHelper(object):
         kpi = next((item for item in service["kpis"] if item['_key'] == kpi_id), None)
         if kpi:
             kpi["urgency"] = urgency
-            payload = dict(_key=service_id,object_type="service", title=service["title"], kpis=service[self.KPIS])
-            if not dry_run:
-                resp = self.kvstore.write_object(service_id, payload)
-        return kpi
+            return kpi #dict(_key=service_id,object_type="service", title=service["title"], kpis=service[self.KPIS])
+        return None
 
 
 if __name__ == '__main__':

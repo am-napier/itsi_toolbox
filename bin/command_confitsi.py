@@ -1,0 +1,249 @@
+#!/usr/bin/env python
+# coding=utf-8
+#
+#from cgitb import reset
+from splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
+from splunklib.client import Endpoint
+
+import json
+import time
+from itsi_kvstore import KVStoreHelper
+import copy
+from perf import Perf
+import sys
+
+"""
+"""
+
+my_logger = None
+
+@Configuration()
+class ConfITSICommand(StreamingCommand):
+    """
+    Command to update ITSI configuration via the REST API
+
+    Example search to 
+    | rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/service filter="{\"title\":{\"$regex\":\"^ABC.*App\"}}" fields="title,_key,description"
+    | eval value=spath(value, "{}")
+    | mvexpand value
+    | eval title=spath(value, "title"), id=spath(value, "_key"), team=spath(value, "sec_grp"), description=spath(value, "description")
+    | eval new_desc=printf("Updating desc for %s at %s", title, strftime(now(), "%F %T"))
+    | json input=value indent=2 path=description remove="sec_grp,permissions,object_type" value=new_desc 
+    | fields - splunk_server team id
+    | stats values(value) as body
+    | eval body=printf("[%s]", mvjoin(body, ","))
+    | confitsi payload=body debug=f
+
+
+    Adaptive thresholds:
+
+    kpis[{"_key": "<kpi id>", "adaptive_thresholds_is_enabled": <1=enabled, 0=disabled>,
+                        "kpi_threshold_template_id" : <set to empty string ??> ]
+
+    KPI Urgency
+
+    Service Dependencies
+
+    Set Team
+
+    Set Description
+
+    Set Title
+    """
+
+    opt_type = Option(
+        doc='''
+        **Syntax:** **type=***see itoa_interface/get_supported_object_types*
+        **Description:** a valid object type to write based on get_supported_object_types
+        **Default:** service''',
+        name='type',
+        require=True,
+        #default="service", 
+        validate=validators.Set("team", "entity", "service", "base_service_template", "kpi_base_search", "deep_dive", "glass_table", "home_view", 
+        "kpi_template", "kpi_threshold_template", "event_management_state", "entity_relationship", "entity_relationship_rule", "entity_filter_rule", "entity_type")
+    )
+
+    opt_is_bulk = Option(
+        doc='''
+        **Syntax:** **is_bulk=***boolean*
+        **Description:** Set to true if the payload is a bulk update
+        **Default:** True''',
+        name='is_bulk',
+        require=False,
+        default=True,
+        validate=validators.Boolean())    
+
+    opt_is_partial = Option(
+        doc='''
+        **Syntax:** **is_partial=***boolean*
+        **Description:** Sets the is_partial flag, set to True if the payload is partial
+        **Default:** True''',
+        name='is_partial',
+        require=False,
+        default=True,
+        validate=validators.Boolean()) 
+
+    opt_payload = Option(
+        doc='''
+        **Syntax:** **payload=***fieldname*
+        **Description:** The name of the field in the record that contains payload for the call
+        **Default:** payload    ''',
+        name='payload',
+        require=False,
+        default="payload",
+        validate=validators.Fieldname()
+    )
+
+    opt_is_debug = Option(
+        doc='''
+        **Syntax:** **debug=***boolean*
+        **Description:** Don't do anything but validate the call
+        **Default:** True''',
+        name='debug',
+        require=False,
+        default=True,
+        validate=validators.Boolean()) 
+
+    # region Command implementation
+    def __init__(self):
+        super(ConfITSICommand, self).__init__()
+
+    def debug(self):
+        return 
+
+    def stream(self, records):
+        kvstore = KVStoreHelper(self, object_type=self.opt_type)
+        self.logger.info(f"Params debug:{self.opt_is_debug} is_partial:{self.opt_is_partial} is_bulk:{self.opt_is_bulk} object:{self.opt_type} payload:{self.opt_payload}")
+        for r in records:
+            try:
+                body = json.loads(r[self.opt_payload])
+            except json.JSONDecodeError as e:
+                body = "Error parsing body: "+str(e)
+                self.opt_is_debug = True
+
+            if self.opt_is_debug:                
+                yield {
+                    "is_partial":self.opt_is_partial,
+                    "bulk_update": self.opt_is_bulk,
+                    "object_type": self.opt_type,
+                    "payload" : json.dumps(body, indent=4)
+                }
+            else:
+                '''
+                Now we update the config either bulk or single line or do we do all bulk only ;)
+                '''
+                try:
+                    r['confitsi.response'] = kvstore.write_bulk(body)
+                except Exception as e:
+                    r['confitsi.error'] = str(e)
+                yield r
+        
+
+        
+
+
+    def xstream(self, records):
+        """
+        Process each event as an update for the team for that row.  Can be a single service specified by id or a group specified by filter.  filter takes priority if both are present.
+        :param records: An iterable stream of events from the command pipeline.
+        :return: `None`.
+        """
+        self.logger.info('Team Update Command entering stream.')
+        t1 = time.time()
+        self.logger.info(f'OPTIONS team: {self.mode}')
+
+        if not self.mode.lower() in ["read", "write"]:
+            raise ValueError(f"mode expects read or write, not '{self.mode}'")
+        helper = ConfITSICommandHelper(self)
+        res = []
+        for record in records:
+            if self.mode.lower() == 'read':            
+                res += helper.read(record, self.fields)
+            else:
+                # mode is write
+                res += helper.write(record)
+            self.logger.info("looping 1")
+        for r in res:
+            self.logger.info("yielding 1 %s %s" %( type(r), str(r)) )
+            yield r
+
+        self.logger.info("Full update complete")
+
+    # endregion
+
+
+class ConfITSICommandHelper(object):
+
+    def __init__(self, command):
+        self.logger = command.logger
+        self.kvstore = KVStoreHelper(command)
+
+
+    def read(self, record, fields):
+        id=record.get("id")
+        filter = record.get("filter")
+        res = []
+        if id is not None:
+            res = self.read_by_id(id, fields)
+        elif filter is not None:
+            res = self.read_by_filter(filter, fields)
+        else:
+            raise ValueError("read function expects either id (ie _key) or filter (mongo) argument")
+        for r in res:
+            r.update(record)
+            r["hello"] = "Cesar"
+        return res            
+
+    def read_by_id(self, id, fields=None):
+        '''
+        Gets the current settings for the service(s) assigned 
+        Returns a list of events with an item for each service found, ie if the filter matches 10 services then 10 rows are returned
+        If an id was used then its 1 or an error if the id was not valid.
+        '''
+        return self.kvstore.read_list(
+            filter = self.kvstore.get_filter(field="_key", value=id),
+            fields = fields
+        )
+
+
+    def read_by_filter(self, filter, fields=None):
+        '''
+        Read all services that match based on this filter
+        '''
+        return self.kvstore.read_list(filter=filter, fields=fields)
+
+
+    def write(self, record):
+        '''
+        Update the team on the services suppied (by id or filter) using the id passed in the param team
+        :param id is the guid of the service to be updated, this is used over filter if present
+        :return row that has had a new field added with the result of the update
+        '''
+        id = record.get("id")
+        filter = record.get("filter")
+        team = record.get("team")
+        cfg = {
+            "sec_grp":team,
+            "description":f"updated by set team 123"
+        }
+        if id is not None:
+            record["setteam"] = self.kvstore.write_object(id, cfg)
+        else:
+            # update in bulk with a filter means read all the services we want to update
+            # get their configs and write them to a list for bulk_update
+            cfg = []
+            for r in self.kvstore.read_list(filter=filter, fields=["_key","title"]):
+                cfg.append({"_key":r["_key"], "title":r["title"], "team":team})
+                self.logger.info("IN BULK UPDATE")
+            self.logger.info("OUT BULK UPDATE ")    
+            record["setteam"] = self.kvstore.write_bulk(cfg)
+            self.logger.info("OUT BULK UPDATE 2")    
+
+        self.logger.info("BULK UPDATE DONE")
+        return [record]
+
+
+    
+
+if __name__ == '__main__':
+    dispatch(ConfITSICommand, module_name=__name__)

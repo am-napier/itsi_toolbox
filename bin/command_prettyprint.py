@@ -21,9 +21,8 @@ class PrettyPrintCommand(StreamingCommand):
         **Description:** CSV list of fields to print
         **Default:** value''',
         name='fields',
-        require=True,
-        default="value",
-        validate=None) #validators.String())
+        require=False,
+        default="value") #,validate=validators.Fieldname())
 
     opt_remove = Option(
         doc='''

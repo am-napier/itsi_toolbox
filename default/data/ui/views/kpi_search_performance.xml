@@ -1,4 +1,4 @@
-<form>
+<form version="1.1">
   <label>KPI Search Performance</label>
   <description>How are the KPI searches running and which ones need optimisation</description>
   <search id="introspection_hosts">
@@ -57,7 +57,7 @@
             | table savedsearch_name KPI_search_type failed suppressed runtime_headroom_pct avg_runtime max_runtime runs
             | sort +runtime_headroom_pct
             | rex field=savedsearch_name "(?&lt;search_guid&gt;[\S]+) - ITSI Search$"
-            | join search_guid [| rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/kpi_base_search
+            | join search_guid type=left [| rest report_as=text /servicesNS/nobody/SA-ITOA/itoa_interface/kpi_base_search
 | eval value=spath(value, "{}") 
 | mvexpand value 
 | eval search_guid=spath(value, "_key"), title=spath(value, "title")
@@ -68,6 +68,7 @@
         </search>
         <option name="count">10</option>
         <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
         <format type="color" field="runtime_headroom_pct">
           <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
           <scale type="threshold">25,50</scale>

@@ -64,7 +64,18 @@ class ServiceDependencyCommand(StreamingCommand):
         **Default:** add''',
         name='mode',
         require=True,
-        default="add")
+        default="add",
+        validate=validators.Set("add", "remove"))
+
+    opt_is_debug = Option(
+        doc='''
+        **Syntax:** **debug=***boolean*
+        **Description:** Don't do anything but validate the call
+        **Default:** False''',
+        name='debug',
+        require=False,
+        default=False,
+        validate=validators.Boolean())
 
     def_urgency = Option(
         doc='''
@@ -95,33 +106,27 @@ class ServiceDependencyCommand(StreamingCommand):
         """
         self.logger.info('Service Dependency Command entering stream.')
         t1 = time.time()
-        mode = self.opt_mode.lower()
-
-        if not mode in ['add', "remove"]:
-            self.logger.error("unsupported mode, only add or remove are supported")
-            return
 
         # Put your event transformation code here
         helper = ServiceDependencyHelper(self)
-        for record in records:
-            # delete this before production
-            self.logger.info('Stream Record {0}'.format(record))
-            t2 = time.time()
-
-            try:
-                if mode == 'add':
+        try:
+            for record in records:
+                if self.opt_mode == 'add':
                     helper.do_add(record)
                 else:
                     helper.do_remove(record)
-            except Exception as e:
-                record["ErrorMessage"] = "Error, check KPI is a valid dependency, message was: %s " % str(e)
 
-            self.logger.info("{} complete in {} secs".format(mode, time.time() - t2))
-            yield record
-
-        self.logger.info("Full update time is:{}".format(time.time() - t1))
-
-    # endregion
+            yield {
+                'payload' : helper.get_payload()
+            }
+        
+            self.logger.info("Total time is:{}".format(time.time() - t1))
+        except Exception as e:
+            msg = "Error, check KPI is a valid dependency, message was: %s " % str(e)
+            yield {
+                "ErrorMessage": msg
+            }
+            self.logger.error(msg)
 
 
 class ServiceDependencyHelper(object):
@@ -134,6 +139,40 @@ class ServiceDependencyHelper(object):
         self.CHILD_LINKS = "services_depending_on_me"
         self.KPI_LIST = "kpis_depending_on"
         self.URGENCY_LIST = "overloaded_urgencies"
+        # this services map is a cache for all service config during the execution of this command
+        self.services = {}
+
+
+    def get_payload(self):
+        return json.dumps(list(self.services.values()))
+
+
+    def get_service(self, id):
+        """
+        Read the service from the kvstore or from the local cache
+        If it's not found make a dummy place holder that can be seen in the output
+        """
+        if id not in self.services.keys():
+            try:
+                cfg = self.kvstore.read_object(id)
+                self.services[id] = {
+                    "_key" : id,
+                    "title" : cfg["title"]}
+                if self.PARENT_LINKS in cfg:    
+                    self.services[id][self.PARENT_LINKS] = cfg[self.PARENT_LINKS]
+                if self.CHILD_LINKS in cfg:    
+                    self.services[id][self.CHILD_LINKS] = cfg[self.CHILD_LINKS]
+            except Exception as e:
+                # service doesn't exist, dummy needs some empty arrays so we don't throw exceptions
+                self.logger.error(f"Service Read Failure for {id} : {e}")
+                self.services[id] = {
+                    "MISSING_key" : id,
+                    "ERROR" : str(e),
+                    #self.KPI_LIST : [],
+                    self.PARENT_LINKS :[],
+                    self.CHILD_LINKS :[]
+                }
+        return self.services[id]
 
 
     def insert_or_update_links(self, object, tag, svc_id, kpi_id, urgency=None):
@@ -182,10 +221,10 @@ class ServiceDependencyHelper(object):
         # add it to the array if its not there
         if link not in object[tag]:
             object[tag].append(link)
-        """add the kpi to the links object if its not there"""
+        # add the kpi to the links object if its not there
         if kpi_id not in link[self.KPI_LIST]:
             link[self.KPI_LIST].append(kpi_id)
-        """update urgency if provided, should only happen for the parent node"""
+        # update urgency if provided, should only happen for the parent node
         if urgency is not None:
             if not self.URGENCY_LIST in link:
                 link[self.URGENCY_LIST] = {}
@@ -193,44 +232,6 @@ class ServiceDependencyHelper(object):
         # return is for testing only
         return link
 
-    def do_add(self, record, dry_run=False):
-        """
-        """
-        parent_id = record.get("parent", None)
-        child_id = record.get("child", None)
-        kpi_id = record.get('kpiid', "")
-        if "" == kpi_id:
-            kpi_id = "SHKPI-%s" % child_id
-        if None in [parent_id, child_id, kpi_id]:
-            raise RuntimeError("Missing required fields parent:{}, child:{}, optional (kpi:{})".format(parent_id, child_id, kpi_id))
-        parent = self.kvstore.read_object(parent_id)
-        child = self.kvstore.read_object(child_id)
-        urgency = record.get('urgency', self.def_urgency)
-
-        self.logger.info("DO ADD: parent:{}, child:{}, kpi:{} urgency:{}".format(parent_id, child_id, kpi_id, urgency))
-        parent_links = self.insert_or_update_links(parent, self.PARENT_LINKS, child_id, kpi_id, urgency)
-        child_links = self.insert_or_update_links(child, self.CHILD_LINKS, parent_id, kpi_id)
-        self.logger.info("Linking parent {} to child {} with parent-cfg:{} child-cfg:{}".format(parent_id, child_id,
-                                json.dumps(parent_links, indent=2), json.dumps(child_links, indent=2)))
-        payload = [
-            {
-                "_key" : parent_id,
-                "object_type":"service",
-                "title" : parent["title"],
-                self.PARENT_LINKS: parent[self.PARENT_LINKS]
-            },
-            {
-                "_key": child_id,
-                "object_type": "service",
-                "title": child["title"],
-                self.CHILD_LINKS: child[self.CHILD_LINKS]
-            }
-        ]
-        if not dry_run:
-            resp = self.kvstore.write_bulk(json.dumps(payload))
-
-        return payload
-        # write the new services
 
     def remove_links(self, links, svc_id, kpi_id):
         """
@@ -246,6 +247,9 @@ class ServiceDependencyHelper(object):
         """
         # find the one for svc_id
         svc_link = next((link for link in links if link['serviceid'] == svc_id and kpi_id in link[self.KPI_LIST]), None)
+        if svc_link is None:
+            self.logger.warn(f"No kpi called {kpi_id} exists in svc {svc_id} for links {links}")
+            return
         try:
             svc_link[self.KPI_LIST].remove(kpi_id)
             if self.URGENCY_LIST in svc_link:
@@ -257,6 +261,31 @@ class ServiceDependencyHelper(object):
             self.logger.warn("Error in remove links, please forgive crappy message... {} ".format(e))
             """fail the update because we can't complete with a partial set"""
             raise e
+
+
+
+    def do_add(self, record, dry_run=False):
+        """
+        """
+        parent_id = record.get("parent", None)
+        child_id = record.get("child", None)
+        kpi_id = record.get('kpiid', "")
+        if "" == kpi_id:
+            kpi_id = "SHKPI-%s" % child_id
+        if None in [parent_id, child_id, kpi_id]:
+            raise RuntimeError("Missing required fields parent:{}, child:{}, optional (kpi:{})".format(parent_id, child_id, kpi_id))
+
+        parent = self.get_service(parent_id)
+        child = self.get_service(child_id)
+        urgency = record.get('urgency', self.def_urgency)
+
+        self.logger.info("DO ADD: parent:{}, child:{}, kpi:{} urgency:{}".format(parent_id, child_id, kpi_id, urgency))
+        parent_links = self.insert_or_update_links(parent, self.PARENT_LINKS, child_id, kpi_id, urgency)
+        child_links = self.insert_or_update_links(child, self.CHILD_LINKS, parent_id, kpi_id)
+        self.logger.info("Linking parent {} to child {} with parent-cfg:{} child-cfg:{}".format(parent_id, child_id,
+                                json.dumps(parent_links, indent=2), json.dumps(child_links, indent=2)))
+
+
 
     def do_remove(self, record, dry_run=False):
         """
@@ -276,31 +305,14 @@ class ServiceDependencyHelper(object):
         if None in [parent_id, child_id]:
             raise RuntimeError(
                 "Missing required fields parent:{}, child:{}, optional (kpi:{})".format(parent_id, child_id, kpi_id))
-        parent = self.kvstore.read_object(parent_id)
-        child = self.kvstore.read_object(child_id)
+
+        parent = self.get_service(parent_id)
+        child = self.get_service(child_id)
 
         self.logger.info("DO REMOVE: parent:{}, child:{}, kpi:{} ".format(parent_id, child_id, kpi_id))
         self.remove_links(parent[self.PARENT_LINKS], child_id, kpi_id)
         self.remove_links(child[self.CHILD_LINKS], parent_id, kpi_id)
 
-        payload = [
-            {
-                "_key": parent_id,
-                "object_type": "service",
-                "title": parent["title"],
-                self.PARENT_LINKS: parent[self.PARENT_LINKS]
-            },
-            {
-                "_key": child_id,
-                "object_type": "service",
-                "title": child["title"],
-                self.CHILD_LINKS: child[self.CHILD_LINKS]
-            }
-        ]
-        if not dry_run:
-            resp = self.kvstore.write_bulk(json.dumps(payload))
-
-        return payload
 
 if __name__ == '__main__':
     dispatch(ServiceDependencyCommand, module_name=__name__)

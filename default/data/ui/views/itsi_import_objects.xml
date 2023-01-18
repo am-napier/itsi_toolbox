@@ -1,0 +1,330 @@
+<form>
+  <label>ITSI Import Tasks</label>
+  <fieldset submitButton="false">
+    <input type="time" token="field1">
+      <label></label>
+      <default>
+        <earliest>-60m@m</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="text" token="search_filter" searchWhenChanged="true">
+      <label>Search Name Filter</label>
+      <default>*</default>
+      <initialValue>*</initialValue>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <html>
+  <p>This page is here to help monitor the import process for services and entities.</p>
+  <p>The logging for each type is quite different, this page is geared more towards entities but will also work for services.</p>
+  <ul>
+          <li>Start by selecting an Import Search from the top table (or clicking a series the chart).</li>
+  <li>Next you'll get a list of all the processes that ran for that search in the period covered by the time control, see: "Messages for ITSI Import Objects"</li>
+  <li>In Message for {search_name}, pick a process and the process detail panel will load for that one invocation.</li>
+  <li>To filter the log level use the multi select at the top of the page.</li>
+  <li>Feel free to open the panels in search and play with the SPL to get more insights.</li>
+  </ul>
+  Finally, add any good improvments back into this page.</html>
+    </panel>
+    <panel>
+      <title>Past Runs - Open is search to explore or click a row and view records at the bottom of the screen</title>
+      <table>
+        <title>$pid$</title>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" 
+| rex "recurring_import=(?&lt;import_name&gt;(ITSI Import Objects)?[^\]]+)"
+| rex "process:(?&lt;pid&gt;\d+) \w+:\w+ (?&lt;logger&gt;[A-Z]+) "
+| stats latest(_time) as _time, values(import_name) as search, sum(eval(if(logger=="ERROR", 1, 0))) as Errors, sum(eval(if(logger=="WARNING", 1, 0))) as Warnings, sum(eval(if(logger=="INFO", 1, 0))) as Info by pid
+| sort - _time</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">5</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <set token="pid">$click.value$</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Summary Stats</title>
+      <table>
+        <title>Summary statistics for each of the searches - Sort total_imports</title>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "*$search_filter$*" recurring_import
+| rex "recurring_import=(?&lt;import_name&gt;(ITSI Import Objects)?[^\]]+)"
+| rex "process:(?&lt;pid&gt;\d+)"
+| rex "number of entities with dimension changes - (?&lt;dim_changes&gt;\d+)"
+| rex "number of entities with status changes - (?&lt;status_changes&gt;\d+)"
+| rex "total number of entities to import - (?&lt;total_imports&gt;\d+)"
+| stats count, dc(pid) as invokations, sum(dim_changes) as dim_changes, sum(status_changes) as status_changes, sum(total_imports) as total_imports, sum(eval(if(match(log_level, "ERROR"),1,0))) as errors, sum(eval(if(match(log_level, "WARN"),1,0))) as warnings by import_name
+| sort - total_imports</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+        <drilldown>
+          <set token="search_name">$click.value$</set>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Activity by Search Name</title>
+      <chart>
+        <title>Indicates activity from the logs for the named search, this is not all the log lines</title>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "$search_filter$" recurring_import
+| rex "recurring_import=(?&lt;import_name&gt;(ITSI Import Objects)?[^\]]+)"
+| table _time log_level import_name message pid, _raw
+| rex "\[.{2,}\] \[.{2,}\]\s*(?&lt;message&gt;\w+.*)"
+```| rex mode=sed field=message "s/(Finished |tid=\w+|\w+_time=[e\-\d.]+|owner='\w+')//g"```
+| timechart minspan=1m count by import_name</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisStart</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <drilldown>
+          <set token="search_name">$click.name2$</set>
+        </drilldown>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Activity by Process for $search_name$</title>
+      <chart>
+        <title>How many of the key actions were executed for this search</title>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "recurring_import=$search_name$"
+| rex "recurring_import=(?&lt;import_name&gt;(ITSI Import Objects)?[^\]]+)"
+| rex "number of entities with dimension changes - (?&lt;dim_changes&gt;\d+)"
+| rex "number of entities with status changes - (?&lt;status_changes&gt;\d+)"
+| rex "total number of entities to import - (?&lt;total_imports&gt;\d+)"
+| timechart minspan=1m sum(dim_changes) as "dimension changes", sum(status_changes) as "status changes", sum(total_imports) as total_imports</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <drilldown>
+          <set token="search_name">$click.name2$</set>
+        </drilldown>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Messages for $search_name$</title>
+      <table>
+        <title>Key messages logged with time span of 1 minute granularity - Sort Desc</title>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "recurring_import=$search_name$"
+| rex "\[.{2,}\] \[.{2,}\]\s*(?&lt;message&gt;\w+.*)"
+| rex "process:(?&lt;process&gt;\d+)"
+```| rex mode=sed field=message "s/(Finished |tid=\w+|\w+_time=[e\-\d.]+|owner='\w+')//g"```
+| eval t=_time
+| bin _time span=1m
+| rex "number of entities with dimension changes - (?&lt;dim_changes&gt;\d+)"
+| rex "number of entities with status changes - (?&lt;status_changes&gt;\d+)"
+| rex "total number of entities to import - (?&lt;total_imports&gt;\d+)"
+| stats values(message) as messages min(t) as start, max(t) as end sum(dim_changes) as dim, sum(status_changes) as stat, sum(total_imports) as tot by process, _time
+| sort - _time
+| eval dur=end-start, time=strftime(_time, "%b %d %H:%M")
+| fields - end, start, _time
+| table process, time, messages, dim, stat, tot, dur</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">10</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <set token="pid">$click.value$</set>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <title>Logger Breakdown</title>
+      <table>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "process:$pid$"
+| stats c by log_level </query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">50</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Logger Breakdown</title>
+      <chart>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "process:$pid$"
+| stats c by log_level </query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">pie</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">all</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Process Detail</title>
+      <input type="multiselect" token="log_level">
+        <label>log_level</label>
+        <choice value="*">ALL</choice>
+        <choice value="ERR*">ERROR</choice>
+        <choice value="WARN*">WARN</choice>
+        <choice value="INFO">INFO</choice>
+        <choice value="DEBUG">DEBUG</choice>
+        <default>*</default>
+        <prefix>log_level IN (</prefix>
+        <suffix>)</suffix>
+        <delimiter>,</delimiter>
+      </input>
+      <table>
+        <title>Detailed messages for process $pid$ - Sort Asc</title>
+        <search>
+          <query>index=_internal source=*import* sourcetype=itsi_internal_log source="*itsi_command_itsi_import_objects.log*" "process:$pid$" $log_level$
+| rex "\[.{2,}\] \[.{2,}\]\s*(?&lt;message&gt;\w+.*)"
+| table _time, log_level, message| sort _time</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">50</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</form>
