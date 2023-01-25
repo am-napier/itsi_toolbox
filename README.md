@@ -7,7 +7,33 @@ Add [splunklib](https://github.com/splunk/splunk-sdk-python/tree/master/splunkli
 
 Logging is provided in $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
 
-# under construction
+The app contains commands, macros dashboards and other bits to make ITSI admin a bit easier
+
+###Commands:
+confitsi - writes to any itoa_interface object type (where permitted by the API) allowing updates.  Very useful to change properties on entities (imports do most of that though) and services (update settings like KPI AT/AD, entity filters, bulk enable/disables).  Can also create objects.  Uses json_object, json_array, json_set etc. to build up a payload that is then written to ITSI.
+itsidelete - deletes itsi objects by id or by filter
+prettyprint - format json returned by API calls.
+kpiurgency - creates JSON to update kpi urgency values because its a PITA to do that in SPL, use with confitsi
+servicedependency - creates more JSON for confitsi
+episodeupdate - where this project started, this command changes the writable properties of episodes, status, severity and is_active.  For some reason updates to other episode properties failed.  Allows for bulk updates (not really using bulk updates though) from SPL to close many episodes rather than use the UI.
+
+###Macros:
+itoa_rest(4)(3) - runs rest callls on itoa_interface and does some initial processing (spath and mvexpand), try`| itoa_rest("service", "title", "foo", "_key,title,entity_rules")` if you have some services that contain foo in the name
+get_svc_json(3)(2) - calls itoa_rest for services
+get_entity_json(3)(2) - calls itoa_rest for entities
+get_payload - combines many rows into a single payload for confitsi to write in one call
+service_tree_dependencies(1) - gets the sub services n levels down.  Not trivial to use, needs an example.
+
+### Dashboards:
+KPI Search Performance - review KPI search times. Pimped up version of the itsi health report
+Saved Search Performance - review saved search times. Like kpi search performance but no links to base search details
+ITSI Import Objects - review the import objects jobs that are running
+Adaptive Metrics Analyzer - old dashboard, probably better tools in the CP for monitoring and alerting nowdays but this quick dash allows browsing of service/kpi/entity values from itsi_summary_metrics.  Time range is Sun-Sun so we can see the patterns that might apply to timebased thresholds
+
+###Alerts:
+mytsm - mighty good service management (lol) is an example alert that writes its payload in var/log/mytsm.log.  Its just a demonstration of how notable_alert_actions work.  Planning on integrating that with bi-directional ticketting so it could act as a demo service desk.
+
+#### Rest of this page is under construction
 If you need this reach out to me and I can provide a word doc with many more examples and comments while I work out how to export that to markdown.
 
 ## Commands
