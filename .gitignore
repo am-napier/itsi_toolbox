@@ -3,6 +3,7 @@ bin/splunklib*/
 bin/testing.py
 bin/README
 bin/test/test_env.py
+lib/
 foo.txt
 metadata/local.meta
 .gitignore
