@@ -1,111 +1,104 @@
 #!/usr/bin/env python
 # coding=utf-8
 #
-from splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+
+from splunklib.searchcommands import dispatch, GeneratingCommand, Configuration, Option, validators
 import splunklib
 
 import json
 import time
 
 @Configuration()
-class ItsiDeleteCommand(StreamingCommand):
+class ItsiDeleteCommand(GeneratingCommand):
 
-    """
-    Option not supported by the REST API so commented for now
-    opt_batch_size = Option(
-        doc='''
-        **Syntax:** **batch_size=***int*
-        **Description:** Number of objects to delete per operation.
-        **Default:** 100''',
-        name='batch_size',
-        require=False,
-        default=100,
-        validate=validators.Integer())
 
-    opt_timeout = Option(
+    opt_confirm = Option(
         doc='''
-        **Syntax:** **timeout=***int*
-        **Description:** Number of minutes to let this go on for.
-        **Default:** 10''',
-        name='timeout',
-        require=False,
-        default=10,
-        validate=validators.Integer())
-    """
-
-    opt_debug = Option(
-        doc='''
-        **Syntax:** **debug=***boolean*
-        **Description:** If true then just test the delete
+        **Syntax:** **confirm=***boolean*
+        **Description:** If true then run the delete, if false or null then just count the affected objects for the given filter.
         **Default:** False''',
-        name='debug',
-        require=False,
-        default=True,
-        validate=validators.Boolean())
-
-    opt_mode = Option(
-        doc='''
-        **Syntax:** **mode=***string*
-        **Description:** Either id or filter, if id then each row must conatin a valid object ID.  If filter then expects a column called filter
-        with a key=value format, ie filter="dc=ACME" will delete all entities that have an attribute dc matching the regex ^ACME$
-        **Default:** id''',
-        name='mode',
-        require=False,
-        default="id",
-        validate=validators.Set("id", "filter"))
-
-    opt_is_rex = Option(
-        doc='''
-        **Syntax:** **is_rex=***boolean*
-        **Description:** If true then the value component of the field will be used as a regex term, ie filter="villan=wile|sam" yields matches for all villans
-        whos names contain wile or same
-        **Default:** False''',
-        name='is_rex',
+        name='confirm',
         require=False,
         default=False,
-        validate=validators.Boolean())
+        validate=validators.Boolean())    
 
     opt_type = Option(
         doc='''
         **Syntax:** **type=***entity|service|kpi_threshold_template|deepdive*
         **Description:** String value from the REST endpoint itoa_interface/get_supported_object_types
-        **Default:** entity''',
+        **Default:** None''',
         name='type',
         require=True,
+        default=None,
         validate=validators.Set("team", "entity", "service", "base_service_template", "kpi_base_search", "deep_dive", "glass_table", "home_view", "kpi_template", 
                 "kpi_threshold_template", "event_management_state", "entity_relationship", "entity_relationship_rule", "entity_filter_rule", "entity_type"))    
 
+    opt_field = Option(
+        doc='''
+        **Syntax:** **field=****string*
+        **Description:** A property to search, eg title or host
+        **Default:** title''',
+        name='field',
+        require=False,
+        default='title',
+        validate=validators.Fieldname())  
+
+    opt_pattern = Option(
+        doc='''
+        **Syntax:** **pattern=****regex*
+        **Description:** An unanchored regex string to search with, ie a value of 'A' matches everything that contains an A
+                         Will reject an empty string with value error
+        **Default:** None''',
+        name='pattern',
+        require=True)  
 
     def __init__(self):
         super(ItsiDeleteCommand, self).__init__()
 
 
-    def stream(self, records):
+    def generate(self):
         '''
-        Called from the search pipeline to delete object sfrom the itsi kvstore collections
-        Can delete any object that is a valid object type
-        Deletes can be done by ID or by filter
-        Use the debug mode to check what the filter matches
         '''
-        t1 = time.time()
-        n = 0
-        for record in records:
-            n = n+1
-            self.logger.debug('Record to delete ITSI Objects: '.format(record))
-            t2 = time.time()
-            if self.opt_mode == "id":
-                self.delete_by_id(record)
-            else:
-                self.delete_by_filter(record)
-            t3 = time.time()
-            self.logger.debug("single_delete_time={}".format(t3-t2))
-            yield record
-        t4 = time.time()
-        if n > 0:
-            self.logger.info("total_delete_time={}".format(t4 - t1))
-        
-        self.logout()
+        self.logger.debug(f'Generating command to delete ITSI Object Type:{self.opt_type} confirm:{self.opt_confirm} pattern:{self.opt_pattern}, field:{self.opt_field}')
+        '''
+        Deletes kvstore records using a filter or checks to see how many will be deleted
 
+        filter='{"title": {"$regex":"(od|eve).*"}}'  
+        '''
+        result = {}
+        msg = None
+        if self.opt_pattern is None or self.opt_pattern=="":
+            raise ValueError("ERROR: no value for pattern was passed or its blank")
+
+        object_filter = f'{{"{self.opt_field}": {{"$regex":"{self.opt_pattern}"}}}}'
+        # create the URL
+        url = f"/servicesNS/nobody/SA-ITOA/itoa_interface/{self.opt_type}"
+        self.logger.info(f"{self.opt_type} delete by filter confirm:{self.opt_confirm} filter={object_filter} url={url}")
+                
+        if not self.opt_confirm:
+            # calls the url as a get - ie NO delete
+            res = self.get_context().get(url, filter=object_filter)
+            n_objs = len(json.loads(res['body'].read()))
+            msg = f"DEBUG - command will delete {n_objs} {self.opt_type}(s) when run with confirm=1."
+        else:
+            # calls the url using HTTP - DELETE
+            res = self.get_context().delete(url, filter=object_filter)
+            if int(res['status']) > 299:
+                msg = f"ERROR during entity delete {res['status']}, check logs."
+                self.logger.error(json.dumps(res))
+            else:
+                msg = f"ITSI Object delete OK status:{res['status']}"
+        
+        result['_raw'] = msg
+        result['filter'] = object_filter
+        result['url'] = url
+        result['http_status'] = res['status']
+            
+        self.logout()    
+        yield result
+        
 
     def get_context(self):
         '''
@@ -125,66 +118,6 @@ class ItsiDeleteCommand(StreamingCommand):
         if hasattr(self, 'context'):
             self.context.logout()
 
-
-    def delete_by_id(self, record):
-        '''
-        Deletes records one row at a time using the kvstore key field
-        '''
-        entity_id=record.get("id", "None")
-        self.logger.info("called delete_by_id:{}".format(entity_id))
-        url = f"/servicesNS/nobody/SA-ITOA/itoa_interface/{self.opt_type}/{entity_id}"
-        if self.opt_debug:
-            msg = f"noop - this is debug: {url}"
-        else:
-            res = self.get_context().delete(url)
-            self.logger.info("Delete Response status:{}, ".format(res['status']))
-            msg = res['status']
-        record['delete response'] = msg
-
-
-    def delete_by_filter(self, record):
-        '''
-        Deletes kvstore records using a filter or checks to see how many will be deleted
-        Caller may specify if this is regex or not
-        filter='{"title": "foo"}'
-          or
-        filter='{"type": {"$regex":"(od|eve).*"}}  "^[^ABC]$"
-        '''
-        filter = record.get("filter")
-        if filter is None or filter=="":
-            record['delete response'] = "no filter string was passed"
-        else:
-            # create the filter
-            key, value = [i for i in filter.split("=", 1)]
-            if len(value)==0:
-                msg = f"Can't pass an empty value in the filter:'{filter}', to delete empty strings explictity use a regex like ^$"
-            else:
-                value = f'"{value}"'
-                if self.opt_is_rex: #
-                    value = f'{{"$regex": {value}}}'
-                object_filter = f'{{"{key}": {value}}}'
-                record['delete.filter'] = object_filter
-                # create the URL
-                url = f"/servicesNS/nobody/SA-ITOA/itoa_interface/{self.opt_type}"
-                self.logger.info(f"{self.opt_type} delete by filter debug={self.opt_debug} filter={object_filter} url={url}")
-                
-                if self.opt_debug:
-                    # calls the url as a get - ie NO delete
-                    res = self.get_context().get(url, filter=object_filter)
-                    msg = f"noop: this is debug only, action will delete {len(json.loads(res['body'].read()))} {self.opt_type} objects when run"
-                    record['url'] = url
-                    record['filter'] = filter
-                else:
-                    self.logger.info(f"Entity delete filter is {object_filter}")
-                    # calls the url using HTTP - DELETE
-                    res = self.get_context().delete(url, filter=object_filter)
-                    if int(res['status']) > 299:
-                        msg = "Error during entity delete {}".format(res['status'])
-                        
-                    else:
-                        msg = f"ITSI Object delete OK status:{res['status']}"            
-            record['delete.response'] = msg
-        self.logger.info("Delete Response status:{}, ".format(record))
 
 
 if __name__ == '__main__':

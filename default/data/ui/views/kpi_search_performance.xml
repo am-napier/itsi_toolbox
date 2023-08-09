@@ -1,4 +1,4 @@
-<form version="1.1">
+<form>
   <label>KPI Search Performance</label>
   <description>How are the KPI searches running and which ones need optimisation</description>
   <search id="introspection_hosts">
@@ -68,7 +68,6 @@
         </search>
         <option name="count">10</option>
         <option name="drilldown">cell</option>
-        <option name="refresh.display">progressbar</option>
         <format type="color" field="runtime_headroom_pct">
           <colorPalette type="list">[#D93F3C,#F7BC38,#65A637]</colorPalette>
           <scale type="threshold">25,50</scale>

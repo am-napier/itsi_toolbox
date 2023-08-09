@@ -31,14 +31,21 @@ class KVStoreHelper(object):
 
     def handle_response(self, response, context):
         status = int(response['status'])
-        self.logger.info('handle_response status={} context={}'.format(status, context))
         if status > 299:
             raise RuntimeError("Request failed in {}, response was {}".format(context, response))
-        elif status == 204:
-            return True #no content to return
-        else:
-            self.logger.info(f"response: {response}")
-            return json.loads(response['body'].read())
+
+        try:
+            body=json.loads(response['body'].read())
+            self.logger.info('handle_response response {} body{} status={} context={}'.format(response, body, status, context))
+        except:
+            body=""
+
+        self.logger.info(f'BODDDY :{body}')
+        return {
+            "status":response['status'],
+            "body": body,
+            "reason":response['reason']
+        }
 
 
     def write_cache(self):
@@ -147,8 +154,7 @@ class KVStoreHelper(object):
             "is_partial": 1 if is_partial else 0,
             "body": json.dumps(cfg)
         }
-        foo = f'URI:{uri}, params: {json.dumps(payload)}'
-        self.logger.info(foo)
+        self.logger.info(f'URI:{uri}, params: {json.dumps(payload)}')
         return self.handle_response(self.service.post(uri, **payload), "write_object")
 
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
 #
-#from cgitb import reset
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+
 from splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
 from splunklib.client import Endpoint
 
@@ -32,7 +34,7 @@ class ConfITSICommand(StreamingCommand):
     | fields - splunk_server team id
     | stats values(value) as body
     | eval body=printf("[%s]", mvjoin(body, ","))
-    | confitsi payload=body debug=f
+    | confitsi payload=body confirm=f
 
 
     Adaptive thresholds:
@@ -55,23 +57,12 @@ class ConfITSICommand(StreamingCommand):
         doc='''
         **Syntax:** **type=***see itoa_interface/get_supported_object_types*
         **Description:** a valid object type to write based on get_supported_object_types
-        **Default:** service''',
+        **Default:** None''',
         name='type',
         require=True,
-        #default="service", 
         validate=validators.Set("team", "entity", "service", "base_service_template", "kpi_base_search", "deep_dive", "glass_table", "home_view", 
         "kpi_template", "kpi_threshold_template", "event_management_state", "entity_relationship", "entity_relationship_rule", "entity_filter_rule", "entity_type")
-    )
-
-    opt_is_bulk = Option(
-        doc='''
-        **Syntax:** **is_bulk=***boolean*
-        **Description:** Set to true if the payload is a bulk update
-        **Default:** True''',
-        name='is_bulk',
-        require=False,
-        default=True,
-        validate=validators.Boolean())    
+    ) 
 
     opt_is_partial = Option(
         doc='''
@@ -94,82 +85,44 @@ class ConfITSICommand(StreamingCommand):
         validate=validators.Fieldname()
     )
 
-    opt_is_debug = Option(
+    opt_confirm = Option(
         doc='''
-        **Syntax:** **debug=***boolean*
-        **Description:** Don't do anything but validate the call
-        **Default:** True''',
-        name='debug',
+        **Syntax:** **confirm=***boolean*
+        **Description:** Dry run it if confirm=0
+        **Default:** False''',
+        name='confirm',
         require=False,
-        default=True,
+        default=False,
         validate=validators.Boolean()) 
 
     # region Command implementation
     def __init__(self):
         super(ConfITSICommand, self).__init__()
 
-    def debug(self):
-        return 
 
     def stream(self, records):
         kvstore = KVStoreHelper(self, object_type=self.opt_type)
-        self.logger.info(f"Params debug:{self.opt_is_debug} is_partial:{self.opt_is_partial} is_bulk:{self.opt_is_bulk} object:{self.opt_type} payload:{self.opt_payload}")
+        self.logger.info(f"Params confirm:{self.opt_confirm} is_partial:{self.opt_is_partial} object:{self.opt_type} payload:{self.opt_payload}")
         for r in records:
             try:
                 body = json.loads(r[self.opt_payload])
             except json.JSONDecodeError as e:
                 body = "Error parsing body: "+str(e)
-                self.opt_is_debug = True
+                self.opt_confirm = False
 
-            if self.opt_is_debug:                
+            if not self.opt_confirm:
                 yield {
                     "is_partial":self.opt_is_partial,
-                    "bulk_update": self.opt_is_bulk,
                     "object_type": self.opt_type,
-                    "payload" : json.dumps(body, indent=4)
+                    "payload" : json.dumps(body)
                 }
             else:
-                '''
-                Now we update the config either bulk or single line or do we do all bulk only ;)
-                '''
                 try:
-                    r['confitsi.response'] = kvstore.write_bulk(body)
+                    yield {**kvstore.write_bulk(body), **{"input":body}}
                 except Exception as e:
-                    r['confitsi.error'] = str(e)
-                yield r
-        
-
-        
-
-
-    def xstream(self, records):
-        """
-        Process each event as an update for the team for that row.  Can be a single service specified by id or a group specified by filter.  filter takes priority if both are present.
-        :param records: An iterable stream of events from the command pipeline.
-        :return: `None`.
-        """
-        self.logger.info('Team Update Command entering stream.')
-        t1 = time.time()
-        self.logger.info(f'OPTIONS team: {self.mode}')
-
-        if not self.mode.lower() in ["read", "write"]:
-            raise ValueError(f"mode expects read or write, not '{self.mode}'")
-        helper = ConfITSICommandHelper(self)
-        res = []
-        for record in records:
-            if self.mode.lower() == 'read':            
-                res += helper.read(record, self.fields)
-            else:
-                # mode is write
-                res += helper.write(record)
-            self.logger.info("looping 1")
-        for r in res:
-            self.logger.info("yielding 1 %s %s" %( type(r), str(r)) )
-            yield r
-
-        self.logger.info("Full update complete")
-
-    # endregion
+                    yield {"body" : f"Update failed {e}", 
+                           "status" : "failed", 
+                           "input" : body}
 
 
 class ConfITSICommandHelper(object):

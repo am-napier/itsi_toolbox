@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
 #
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+
 from splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
 import json
 
@@ -28,10 +31,10 @@ class PrettyPrintCommand(StreamingCommand):
         doc='''
         **Syntax:** **fields=***string*
         **Description:** CSV list of fields to remove from the output
-        **Default:** None''',
+        **Default:** object_type,sec_grp,permissions''',
         name='remove',
         require=False,
-        default=None,
+        default="object_type,sec_grp,permissions",
         validate=None) #validators.Fieldname())
 
     opt_indent = Option(
@@ -52,7 +55,7 @@ class PrettyPrintCommand(StreamingCommand):
         self.logger.info('Prettyprint Command entering stream.')
         fields = str(self.opt_fields).split(",")
         rms = [] if self.opt_remove is None else str(self.opt_remove).split(",")
-        self.logger.info('fields {}, remove: {}'.format(fields, rms))
+        self.logger.info(f'fields {fields}, remove: {rms}')
         for row in rows:
             for field in fields:
                 self.logger.info('field to print {}'.format(field))

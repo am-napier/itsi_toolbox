@@ -1,7 +1,25 @@
 #
 # ./default.meta
 #
-[]
-access = read: [ * ], write: [ itoa_admin, itoa_team_admin ], delete: [ itoa_admin, itoa_team_admin ]
+[commands/itsidelete]
+access = read : [ admin, itoa_admin ], write : [ admin, itoa_admin ]
+export = system
+owner = admin
+version = 8.2.6
+#export = none
+
+[commands/confitsi]
+access = read : [ admin, itoa_admin ], write : [ admin, itoa_admin ]
+export = system
+owner = admin
+version = 8.2.6
+#export = none
+
+[macros]
+access = read: [ * ], write: [ admin, itoa_admin, itoa_team_admin ], delete: [ admin, itoa_admin, itoa_team_admin ]
 export = system
 
+
+[]
+access = read: [ * ], write: [ admin, itoa_admin, itoa_team_admin ], delete: [ admin, itoa_admin, itoa_team_admin ]
+export = system

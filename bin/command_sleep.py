@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # coding=utf-8
 #
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+
 from splunklib.searchcommands import dispatch, StreamingCommand, Configuration, Option, validators
 import splunklib
 
@@ -26,6 +29,10 @@ def _f(x):
 class SleepCommand(StreamingCommand):
 
     """
+    command to sleep the search pipe, may also be used to load the processor(s)
+    pauses on every record so 10 events with a sleep command of pause=100 is ~ 1 sec
+    I used this for testing the scheduler
+    | makeresults | sleep [| makeresults | eval pause=random()%500+500 | fields pause ]
     """
     opt_load = Option(
         doc='''
