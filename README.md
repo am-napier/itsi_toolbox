@@ -1,3 +1,4 @@
+
 # itsi_toolbox
 Some resources that make some ITSI jobs a little bit easier
 
@@ -9,7 +10,17 @@ Logging is provided in $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
 
 ## Macros
 ### itoa_rest(type, field, regex [, fields])
-Macro to hide implementation of calling rest API for itoa_interface.  Also extracts _key as id and title from the returned JSON.  4th argument is optional and defaults to _key,title.  Run it and expand it to see what it does.
+Macro to hide implementation of calling rest API for itoa_interface.  Auto extracts _key as id and title from the returned JSON for you.  4th argument is optional and defaults to _key,title.  
+Run it and expand it to see what it does.
+
+
+#### args
+|argument|description|
+|-----------|---------|
+|type|one of the values from get supported objects, e.g. service, entity, glass_table etc|
+|field|name of the field to search for, e.g. host, title, _key|
+|regex|unbounded regex to use in the search, note this means it contains the string|
+|fields| CSV list of fields to return, default is title,_key|
 #### usage:
 ```| `itoa_rest("<type>", "<field>", "<value", "<field_list>")` ```
 #### examples:
@@ -25,6 +36,16 @@ Get all entities that have a host field (info or alias) that starts with `win`
 Get all the glasstables, all the fields...
 ```| `itoa_rest("glass_table", "title", "", "")` ```
 
+Append these handy snippet gets all extra fields from the json, add the fields you want to extract
+
+Gets any text or object attributes 
+`| foreach identifier mod_source mod_timestamp [| eval <<FIELD>>=spath(value, "<<FIELD>>")]`
+
+Gets any arrays, ie alias and info values
+`| foreach host [| eval <<FIELD>>=spath(value, "<<FIELD>>{}")]`
+
+Gets hidden system properties and displays them as sys*
+`| foreach _user _key _type [| eval sys<<FIELD>>=spath(value, "<<FIELD>>")]`
 
 
 **Note** there are a few wrappers using this macro you can play with but in practice I just default to itoa_rest.
@@ -35,8 +56,10 @@ Get all the glasstables, all the fields...
 
 ### service_tree_dependencies(n)
 Gets the child services of the services passed.
-args = n
-#### examples:
+#### args
+n - is the level to extract
+
+#### example:
 List 3 levels of services under the service called Splunk
 ```
 | `itoa_rest("service", "title", "^Splunk$", "_key,title")`
@@ -47,16 +70,18 @@ List 3 levels of services under the service called Splunk
 ```
 
 ### get_payload
-Concatenates all values of payload into a json array called payload.  There are two versions, see examples.
+Concatenates all values of payload into a json array called payload.  This is used by confitsi command to format the payload used for updates.  There is a second version with an argument for the name of the field to query/build but I've never found cause to use it.
 
 #### examples:
 Construct a field called payload to generate 3 services 
 ```
- | makeresults count=3 | streamstats c | eval payload=json_object("_key", "id-".c, "title", "Service ".c) | `get_payload` 
+ | makeresults count=2 | streamstats c 
+ | eval payload=json_object("_key", "id-".c, "title", "Service ".c) 
+ | `get_payload` 
  ```
-Outputs:
+ ##### outputs
 ``` 
-[{"_key":"id-1","title":"Service 1"},{"_key":"id-2","title":"Service 2"},{"_key":"id-3","title":"Service 3"}] 
+[{"_key":"id-1","title":"Service 1"},{"_key":"id-2","title":"Service 2"}] 
 ```
 
 ### entity_filter(<field_name>, <field_value>, [<field_type>, [<match_type>]])
@@ -66,6 +91,14 @@ There are 3 versions
  - entity_filter(field_name,field_value)
  - entity_filter(field_name,field_value,field_type)
  - entity_filter(field_name,field_value,field_type,match_type)
+
+#### args
+|argument|description|
+|---|---|
+|field_name|name of the entity match field, e.g. host, datacentre etc.|
+|field_value|the value to match, e.g. win*, dc1, *|
+|field_type|one of info, alias or entity_type|
+|match_type|one of 'matches' or 'does not match'|
 
 The macro just wrappers this code: 
 ```
@@ -321,6 +354,20 @@ Make the search pipeline sleep for some seconds, optionally consume CPU
 |pause|milliseconds to sleep, default=1000|
 |load|percentage load to add to the system, default=0 ie no extra load|
 
+## Dashboards:
+### KPI Search Performance
+Review KPI search times.  This is a pimped up version of the itsi health report with tokens that allow drilldown and expansion of KPI performance plus details on services used by those searches.
 
-## Dashboards
-_TBC_
+### Saved Search Performance
+Provides a review saved search times, aimed at correlation searches but essentially its just a view on saved searches. Works much like KPI Search Performance.
+
+### ITSI Import Objects
+Review the import objects jobs that are running with drill-downs into the logs for errors
+
+### Adaptive Metrics Analyzer
+Its an old dashboard, there are probably better tools in the CP for monitoring and alerting but this quick dashboard allows browsing of service/kpi/entity values from itsi_summary_metrics.  Time range is Sun-Sun so we can see the patterns that might apply to timebased thresholds.  Use it to quickly explore kpi values and open the searches to see how they are  indexed.
+
+## Alerts:
+### mytsm 
+Mighty good service management (lol) is an example alert that writes its payload in var/log/mytsm.log.  It's just a demonstration of how notable_alert_actions work.  Planning on integrating that with bi-directional ticketing so it could act as a demo service desk.  This is buggy and needs further work.
+
