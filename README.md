@@ -319,11 +319,6 @@ Delete all caledars with the word easter in them
 **Note:** as always delete is permanent, perhaps consider archiving to an index before deleting
 
 
-#### usage
-```
-|
-```
-
 ### prettyprint
 Pretty prints a JSON payload 
 
