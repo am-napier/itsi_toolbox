@@ -4,7 +4,8 @@ Some resources that make some ITSI jobs a little bit easier
 
 Deploy as a splunk app in $SPLUNK_HOME/etc/apps.
 
-Add [splunklib](https://github.com/splunk/splunk-sdk-python/tree/master/splunklib) to itsi_toolbox/lib. 
+Add [splunklib](https://github.com/splunk/splunk-sdk-python/releases/tag/1.7.4) to itsi_toolbox/lib.  
+### See lib/README.md
 
 Logging is provided in $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
 
