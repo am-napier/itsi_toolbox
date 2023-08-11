@@ -3,8 +3,7 @@ bin/splunklib*/
 bin/testing.py
 bin/README
 bin/test/test_env.py
-lib/
-foo.txt
+lib/splunklib
 metadata/local.meta
 .gitignore
 
@@ -95,7 +94,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
