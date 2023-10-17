@@ -363,7 +363,3 @@ Review the import objects jobs that are running with drill-downs into the logs f
 ### Adaptive Metrics Analyzer
 Its an old dashboard, there are probably better tools in the CP for monitoring and alerting but this quick dashboard allows browsing of service/kpi/entity values from itsi_summary_metrics.  Time range is Sun-Sun so we can see the patterns that might apply to timebased thresholds.  Use it to quickly explore kpi values and open the searches to see how they are  indexed.
 
-## Alerts:
-### mytsm 
-Mighty good service management (lol) is an example alert that writes its payload in var/log/mytsm.log.  It's just a demonstration of how notable_alert_actions work.  Planning on integrating that with bi-directional ticketing so it could act as a demo service desk.  This is buggy and needs further work.
-
