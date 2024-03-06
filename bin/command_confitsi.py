@@ -61,7 +61,8 @@ class ConfITSICommand(StreamingCommand):
         name='type',
         require=True,
         validate=validators.Set("team", "entity", "service", "base_service_template", "kpi_base_search", "deep_dive", "glass_table", "home_view", 
-        "kpi_template", "kpi_threshold_template", "event_management_state", "entity_relationship", "entity_relationship_rule", "entity_filter_rule", "entity_type")
+        "kpi_template", "kpi_threshold_template", "event_management_state", "entity_relationship", "entity_relationship_rule", "entity_filter_rule", 
+        "entity_type","entity_management_policies")
     ) 
 
     opt_is_partial = Option(
