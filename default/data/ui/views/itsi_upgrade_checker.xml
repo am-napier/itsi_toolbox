@@ -1,0 +1,188 @@
+<form version="1.1" theme="light">
+  <label>ITSI Upgrade Checker</label>
+  <search id="kpi_idx">
+    <query>index=itsi_summary [| inputlookup service_kpi_lookup where title=$svc_pattern|s$ | stats c by _key | rename _key as serviceid | fields serviceid | format ]
+           | fields serviceid kpi _time entity_title alert_value
+    </query>
+    <earliest>$look_back.earliest$</earliest>
+    <latest>$look_back.latest$</latest>
+  </search>
+  <search id="anno" type="annotation">
+    <query>| union [| makeresults | eval _time=$upgrade_time.earliest$, annotation_label="Upgrade Started"]
+                         [| makeresults | eval _time=$upgrade_time.latest$, annotation_label="Upgrade Ended"]</query>
+    <earliest>-1m</earliest>
+    <latest>now</latest>
+  </search>
+  <fieldset submitButton="false"></fieldset>
+  <row>
+    <panel>
+      <input type="time" token="look_back">
+        <label>Look Back Time</label>
+        <default>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </default>
+      </input>
+      <input type="time" token="upgrade_time" searchWhenChanged="true">
+        <label>Upgrade Window</label>
+        <default>
+          <earliest>1704711600</earliest>
+          <latest>1704715601.951</latest>
+        </default>
+      </input>
+      <input type="text" token="svc_pattern" searchWhenChanged="true">
+        <label>Service(s) Pattern</label>
+      </input>
+      <input type="dropdown" token="span">
+        <label>Min Span</label>
+        <choice value="1m">1m</choice>
+        <choice value="5m">5m</choice>
+        <choice value="30m">30m</choice>
+        <choice value="1h">1h</choice>
+        <default>1m</default>
+        <initialValue>1m</initialValue>
+      </input>
+      <html>
+        <div>Helps validate things are working as they should post upgrade.</div>
+        <ul>
+          <li>Set the Upgrade Window input to mark the charts with the start and end time of the upgrade.</li>
+          <li>This could be replaced with a search on _internal too when we work that out. </li>
+          <li>Also set the Look back to the period that covers the upgrade / change</li>
+          <li>Lastly, focus on a sub set of services to drill into trouble spots</li>
+        </ul>
+      </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Percentage Health Scores with NA values</title>
+      <chart>
+        <search base="anno" type="annotation"></search>
+        <search base="kpi_idx">
+          <query>| where kpi="ServiceHealthScore" | timechart count sum(eval(if(alert_value=="N/A", 1, null()))) as nas span=$span$| eval percent_NAs=(nas/count)*100
+             | fields _time percent_NAs count
+             | rename count as "Health Score Records"</query>
+        </search>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.overlayFields">"Health Score Records"</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Percentage KPIs with NA values</title>
+      <chart>
+        <search base="anno" type="annotation"></search>
+        <search base="kpi_idx">
+          <query>| where kpi!="ServiceHealthScore" ```AND entity_title="service_aggregate"``` | timechart dc(kpi) as kpi_count count sum(eval(if(alert_value=="N/A", 1, null()))) as nas span=$span$ | eval percent_NAs=(nas/count)*100
+             | fields _time percent_NAs count kpi_count
+             | rename count as "KPI Records"</query>
+        </search>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.overlayFields">"KPI Records",kpi_count</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Percentage Entities with NA values</title>
+      <chart>
+        <search base="anno" type="annotation"></search>
+        <search base="kpi_idx">
+          <query>| where kpi!="ServiceHealthScore" AND entity_title!="service_aggregate" | timechart count sum(eval(if(alert_value=="N/A", 1, null()))) as nas span=$span$ | eval nas=coalesce(nas, 0), percent_NAs=(nas/count)*100
+             | fields _time percent_NAs count
+             | rename count as "Entity Records"</query>
+        </search>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.overlayFields">"Entity Records"</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Services Selected</title>
+        <search base="kpi_idx">
+          <query>| stats count as records dc(kpi) as kpi_count by serviceid | lookup service_kpi_lookup _key as serviceid OUTPUT title as service_name
+| sort - kpi_count
+| table service_name kpi_count records serviceid</query>
+        </search>
+        <option name="drilldown">cell</option>
+        <option name="refresh.display">progressbar</option>
+        <drilldown>
+          <set token="service">$row.serviceid$</set>
+          <set token="service_name">$row.service_name$</set>
+        </drilldown>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>KPIs for the service: $service_name$</title>
+        <search base="kpi_idx">
+          <query>| where serviceid="$service$" 
+| eval entity_title=if(entity_title=="service_aggregate", null(), entity_title)
+| stats count as kpi_record_count, dc(entity_title) as unique_entities by kpi</query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>$service_name$ Percentage Health Scores with NA values</title>
+      <chart>
+        <search base="anno" type="annotation"></search>
+        <search base="kpi_idx">
+          <query>| where kpi="ServiceHealthScore" AND serviceid="$service$" | timechart count sum(eval(if(alert_value=="N/A", 1, null()))) as nas span=$span$| eval percent_NAs=(nas/count)*100
+             | fields _time percent_NAs count
+             | rename count as "Health Score Records"</query>
+        </search>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.overlayFields">"Health Score Records"</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>$service_name$ Percentage KPIs with NA values</title>
+      <chart>
+        <search base="anno" type="annotation"></search>
+        <search base="kpi_idx">
+          <query>| where kpi!="ServiceHealthScore" AND serviceid="$service$"  ```AND entity_title="service_aggregate"``` | timechart dc(kpi) as kpi_count count sum(eval(if(alert_value=="N/A", 1, null()))) as nas span=$span$ | eval percent_NAs=(nas/count)*100
+             | fields _time percent_NAs count kpi_count
+             | rename count as "KPI Records"</query>
+        </search>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.overlayFields">"KPI Records",kpi_count</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>$service_name$ Percentage Entities with NA values</title>
+      <chart>
+        <search base="anno" type="annotation"></search>
+        <search base="kpi_idx">
+          <query>| where kpi!="ServiceHealthScore" AND entity_title!="service_aggregate"  AND serviceid="$service$" | timechart count sum(eval(if(alert_value=="N/A", 1, null()))) as nas span=$span$ | eval nas=coalesce(nas, 0), percent_NAs=(nas/count)*100
+             | fields _time percent_NAs count
+             | rename count as "Entity Records"</query>
+        </search>
+        <option name="charting.axisY2.enabled">1</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.overlayFields">"Entity Records"</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+</form>
