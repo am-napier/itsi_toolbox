@@ -137,7 +137,7 @@ class MWCalCommand(StreamingCommand):
             
             start = int(evt.get('start', 0)) 
             duration = int(evt.get('duration', 0))
-            end =  int(evt.get('end', 0)) 
+            end =  int(evt.get('end', -1)) 
             title = evt.get('title', None)
             key = evt.get('key', None)
             object_type = evt.get('type', None)
@@ -147,10 +147,14 @@ class MWCalCommand(StreamingCommand):
                     "message" : f"Every event requires start:{start}, duration:{duration}, title:{title} and type:{object_type}."})
                 continue
 
-            if duration == 0 and end == 0:
+            if duration == 0 and end == -1:
                 results.append({"status":"failed", 
-                    "message" : f"Every event requires eiter an end:{end} or a duration:{duration}."})
+                    "message" : f"Every event requires either a duration or end specified, set end=0 for infinite."})
                 continue
+
+            # caller asked for infinite window
+            if end == 0:
+                end = 2147385600
 
             if 'ids' in evt:
                 # if there is just one id in the list it treats the string like a list so we wrapper it as a list
@@ -160,7 +164,7 @@ class MWCalCommand(StreamingCommand):
                     "message" : "Every event requires a list of ids, yes I know, even for updates"})
                 continue
     
-            end = end if end>0 else start + duration*60
+            end = end if end>-1 else start + duration*60
 
             payload = {
                 'start_time' : start,
@@ -178,7 +182,8 @@ class MWCalCommand(StreamingCommand):
             except Exception as e:
                 self.logger.error(f"ERROR upserting MW: {e}")
                 results.append({**payload, **{"status":"failed", 
-                          "message" : str(e)}})
+                          "message" : f"""Error: {str(e)}
+If you are trying to update an existing object did you pass the kvstore _key as key=<giud> """ } } )
 
         return results
 
