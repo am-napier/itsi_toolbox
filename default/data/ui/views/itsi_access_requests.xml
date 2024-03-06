@@ -1,0 +1,270 @@
+
+<dashboard version="2" theme="light">
+    <label>ITSI Access requests</label>
+    <description></description>
+    <definition><![CDATA[
+{
+	"dataSources": {
+		"ds_1DVTXHMJ": {
+			"type": "ds.search",
+			"options": {
+				"query": "index=_internal uri_path=\"*$app2$/$interface2$/$path2$*\" sourcetype=splunkd_ui_access \n| timechart max(spent) as max avg(spent) as avg minspan=5m ",
+				"queryParameters": {
+					"earliest": "-12h@h",
+					"latest": "now"
+				}
+			},
+			"name": "Column chart search"
+		},
+		"ds_internal": {
+			"type": "ds.search",
+			"options": {
+				"query": "index=_internal uri_path IN (*homeview* *home_view* *SA-ITOA/itoa_interface*) sourcetype=splunkd_ui_access \n| rex field=uri_path \"^.*(?<app>(SA-ITOA|itsi)+)/(?<interface>\\w+)/(?<path>.+)\"\n| fields _time app interface path clientip file method namespace spent status user useragent\n``` \nSA-ITOA/itoa_interface/home_view \nitsi/data/ui/views/homeview\n```",
+				"queryParameters": {
+					"earliest": "$global_time.earliest$",
+					"latest": "$global_time.latest$"
+				}
+			},
+			"name": "splunkd_ui_access uri_paths"
+		},
+		"ds_internal_phase1": {
+			"type": "ds.chain",
+			"options": {
+				"extend": "ds_internal",
+				"query": "| stats avg(spent) as \"Average response\"\n         p90(spent) as \"90th percentile\"\n         max(spent) as \"Maximum response\"\n         count\n by app interface path\n |  rename app as Application, interface as Interface, path as Path"
+			},
+			"name": "statsd access log"
+		},
+		"ds_internal_phase1-1": {
+			"type": "ds.chain",
+			"options": {
+				"extend": "ds_internal_phase1",
+				"query": "| search Application=\"$dd_application$\""
+			},
+			"name": "filtered by app"
+		},
+		"ds_dRRDztv9": {
+			"type": "ds.chain",
+			"options": {
+				"extend": "ds_internal_phase1-1",
+				"query": "|  search Interface=\"$dd_interface$\" Path=\"$text_path$\"\n|  sort - \"Maximum response\""
+			},
+			"name": "filtered by interface and path"
+		}
+	},
+	"visualizations": {
+		"viz_fV3SjW6G": {
+			"type": "splunk.column",
+			"dataSources": {
+				"primary": "ds_1DVTXHMJ"
+			},
+			"title": "uri_path contains -- $path2$/$interface2$/$path2$",
+			"options": {
+				"y2": "> primary | frameBySeriesNames('count')"
+			}
+		},
+		"viz_zCS7NETj": {
+			"type": "splunk.table",
+			"options": {
+				"columnFormat": {
+					"Average response": {
+						"data": "> table | seriesByName(\"Average response\") | formatByType(Average_responseColumnFormatEditorConfig)"
+					},
+					"90th percentile": {
+						"data": "> table | seriesByName(\"90th percentile\") | formatByType(_90th_percentileColumnFormatEditorConfig)"
+					},
+					"Maximum response": {
+						"data": "> table | seriesByName(\"Maximum response\") | formatByType(Maximum_responseColumnFormatEditorConfig)"
+					}
+				}
+			},
+			"dataSources": {
+				"primary": "ds_dRRDztv9"
+			},
+			"context": {
+				"Average_responseColumnFormatEditorConfig": {
+					"number": {
+						"thousandSeparated": false,
+						"unitPosition": "after",
+						"precision": 2,
+						"unit": "ms"
+					}
+				},
+				"_90th_percentileColumnFormatEditorConfig": {
+					"number": {
+						"thousandSeparated": false,
+						"unitPosition": "after",
+						"precision": 2,
+						"unit": "ms"
+					}
+				},
+				"Maximum_responseColumnFormatEditorConfig": {
+					"number": {
+						"thousandSeparated": false,
+						"unitPosition": "after",
+						"precision": 2,
+						"unit": "ms"
+					}
+				}
+			},
+			"eventHandlers": [
+				{
+					"type": "drilldown.setToken",
+					"options": {
+						"tokens": [
+							{
+								"token": "app2",
+								"key": "row.Application.value"
+							},
+							{
+								"token": "interface2",
+								"key": "row.Interface.value"
+							},
+							{
+								"token": "path2",
+								"key": "row.Path.value"
+							}
+						]
+					}
+				}
+			],
+			"showProgressBar": false,
+			"showLastUpdated": false
+		}
+	},
+	"inputs": {
+		"input_global_trp": {
+			"type": "input.timerange",
+			"options": {
+				"token": "global_time",
+				"defaultValue": "-24h@h,now"
+			},
+			"title": "Global Time Range"
+		},
+		"input_Qo8gq4kd": {
+			"options": {
+				"items": ">frame(label, value) | prepend(formattedStatics) | objects()",
+				"defaultValue": "*",
+				"token": "dd_application"
+			},
+			"title": "Application",
+			"type": "input.dropdown",
+			"dataSources": {
+				"primary": "ds_internal_phase1"
+			},
+			"context": {
+				"formattedConfig": {
+					"number": {
+						"prefix": ""
+					}
+				},
+				"formattedStatics": ">statics | formatByType(formattedConfig)",
+				"statics": [
+					[
+						"All"
+					],
+					[
+						"*"
+					]
+				],
+				"label": ">primary | seriesByName(\"Application\") | renameSeries(\"label\") | formatByType(formattedConfig)",
+				"value": ">primary | seriesByName(\"Application\") | renameSeries(\"value\") | formatByType(formattedConfig)"
+			}
+		},
+		"input_e4udm5EM": {
+			"options": {
+				"items": ">frame(label, value) | prepend(formattedStatics) | objects()",
+				"defaultValue": "*",
+				"token": "dd_interface"
+			},
+			"title": "Interface",
+			"type": "input.dropdown",
+			"dataSources": {
+				"primary": "ds_internal_phase1-1"
+			},
+			"context": {
+				"formattedConfig": {
+					"number": {
+						"prefix": ""
+					}
+				},
+				"formattedStatics": ">statics | formatByType(formattedConfig)",
+				"statics": [
+					[
+						"All"
+					],
+					[
+						"*"
+					]
+				],
+				"label": ">primary | seriesByName(\"Interface\") | renameSeries(\"label\") | formatByType(formattedConfig)",
+				"value": ">primary | seriesByName(\"Interface\") | renameSeries(\"value\") | formatByType(formattedConfig)"
+			}
+		},
+		"input_HE4F4gdQ": {
+			"options": {
+				"defaultValue": "*",
+				"token": "text_path"
+			},
+			"title": "Path pattern",
+			"type": "input.text"
+		}
+	},
+	"layout": {
+		"type": "grid",
+		"options": {
+			"width": 1440,
+			"height": 960
+		},
+		"structure": [
+			{
+				"item": "viz_zCS7NETj",
+				"type": "block",
+				"position": {
+					"x": 0,
+					"y": 0,
+					"w": 1440,
+					"h": 547
+				}
+			},
+			{
+				"item": "viz_fV3SjW6G",
+				"type": "block",
+				"position": {
+					"x": 0,
+					"y": 547,
+					"w": 1440,
+					"h": 300
+				}
+			}
+		],
+		"globalInputs": [
+			"input_global_trp",
+			"input_Qo8gq4kd",
+			"input_e4udm5EM",
+			"input_HE4F4gdQ"
+		]
+	},
+	"title": "ITSI Access requests",
+	"defaults": {
+		"dataSources": {
+			"ds.search": {
+				"options": {
+					"queryParameters": {
+						"latest": "$global_time.latest$",
+						"earliest": "$global_time.earliest$"
+					}
+				}
+			}
+		}
+	}
+}
+    ]]></definition>
+    <meta type="hiddenElements"><![CDATA[
+{
+	"hideEdit": false,
+	"hideOpenInSearch": false,
+	"hideExport": false
+}
+    ]]></meta>
+</dashboard>
