@@ -1,8 +1,4 @@
 local/
-bin/splunklib*/
-bin/testing.py
-bin/README
-bin/test/test_env.py
 lib/splunklib
 metadata/local.meta
 .gitignore
