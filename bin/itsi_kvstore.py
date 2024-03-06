@@ -71,6 +71,8 @@ class KVStoreHelper(object):
     def read_object(self, key):
         """
         read the object from the cache if its there or get from the cache and return it
+        Not thread safe as there is no lock on the kvstore object.
+        Add switch to force read from kvstore under all conditions except where explicitly directed.
         """
         if key is None:
             return None
