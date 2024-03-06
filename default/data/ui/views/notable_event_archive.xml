@@ -1,0 +1,85 @@
+<form version="1.1" theme="light">
+  <label>Notable Event Archive</label>
+  <search id="main">
+    <query>index=_internal source=*itsi_notable_event_archiv* source="/opt/splunk/var/log/splunk/itsi_notable_event_archive-age_notable_event.log" sub_component=notable_event_retention_policy 
+| rex "process:(?&lt;pid&gt;\d+).*notable_event_retention_policy:(?&lt;line&gt;\d+)\] \[(?&lt;method&gt;[^\]]+)](?&lt;message&gt;.*)"
+</query>
+    <earliest>$tm.earliest$</earliest>
+    <latest>$tm.latest$</latest>
+  </search>
+  <fieldset submitButton="false">
+    <input type="time" token="tm">
+      <label></label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <!--panel>
+      <title>$pid$</title>
+      <table>
+        <search base="main">
+          <query>| rex "Successfully moved (?&lt;recs&gt;\d+) events, object_type=(?&lt;collection&gt;\w+)"
+| eval recs=coalesce(recs, 0)
+| eventstats min(_time) as _time max(_time) as end by pid
+| eval span=end-_time, s=printf("%d-x-@@-x-%d-x-@@-x-%d", pid, _time, span)
+| chart sum(recs) as Archived over s by collection
+| rex field=s "(?&lt;PID&gt;\d+)-x-@@-x-(?&lt;_time&gt;\d+)-x-@@-x-(?&lt;span&gt;\d+)"
+| rename notable_event_group as User, notable_group_system as System
+| table _time span PID System, User
+| fillnull System User value="-"</query>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <set token="pid">$row.PID$</set>
+        </drilldown>
+      </table>
+    </panel-->
+    <panel>
+      <table>
+        <title>Log Messages - excl itoa-strorage</title>
+        <search>
+          <query>index=_internal source=*itsi_notable_event_archive-age_notable_event.log "process:$pid$"   sub_component!=itoa_storage 
+| rex "process:(?&lt;pid&gt;\d+)"
+| rex mode=sed "s/^.*\[\w+:\d+\]( \[.*\])?//g"
+| eval collection=coalesce(collection, "-")
+| stats values(collection) as a1 min(_time) as _time, max(_time) as t2, first(_raw) as _raw count by punct, pid, collection
+| eval duration=ceil(t2-_time)
+| sort _time
+| table _time count duration pid _raw</query>
+          <earliest>$tm.earliest$</earliest>
+          <latest>$tm.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>itoa_strorage - Filters</title>
+        <search>
+          <query>index=_internal source=*itsi_notable_event_archive-age_notable_event.log "process:$pid$"   sub_component=itoa_storage objecttype IN (notable_event_group notable_group_system)
+| rex "itoa_storage:(?&lt;line&gt;\d+)"
+| sort _time
+| eval Type=case(objecttype=="notable_event_group", "User", objecttype=="notable_group_system", "System", 1==1, "nfi")
+| table _time method line Type filter</query>
+          <earliest>$tm.earliest$</earliest>
+          <latest>$tm.latest$</latest>
+        </search>
+        <option name="count">100</option>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>    
+  </row>
+</form>
