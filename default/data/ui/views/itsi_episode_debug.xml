@@ -1,0 +1,534 @@
+<form version="1.1" theme="light">
+  <label>ITSI Episode Debug</label>
+  <search id="user">
+    <query>| inputlookup itsi_notable_group_user_lookup</query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <sampleRatio>1</sampleRatio>
+  </search>
+  <search id="system">
+    <query>| inputlookup itsi_notable_group_system_lookup</query>
+    <earliest>-24h@h</earliest>
+    <latest>now</latest>
+    <sampleRatio>1</sampleRatio>
+  </search>
+  <search base="system" id="sys_stats">
+    <query>| stats count count(eval(if(is_active=1, 1, null()))) as active, count(eval(if(is_active=0, 1, null()))) as in_active </query>
+  </search>
+  <search id="metrics">
+    <query>| mstats max(alert_value) prestats=t where index=itsi_summary_metrics [| `service_kpi_list` | search (service_name="C1") AND (kpi_name IN (System* User*)) | fields kpiid | rename kpiid as itsi_kpi_id | format ] AND (entity_title="service_aggregate")
+BY itsi_kpi_id span=1h
+| join itsi_kpi_id [|`service_kpi_list` | rename kpiid as itsi_kpi_id | fields itsi_kpi_id, service_name, kpi_name ]
+    </query>
+    <earliest>$kpi_time.earliest$</earliest>
+    <latest>$kpi_time.latest$</latest>
+    <sampleRatio>1</sampleRatio>
+  </search>
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="kpi_time">
+      <label></label>
+      <default>
+        <earliest>-7d@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <title>KPI Group User Records</title>
+      <single>
+        <search base="metrics">
+          <query>| search kpi_name="User Collection" | timechart limit=30 span=1h max(alert_value) by kpi_name</query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051", "0x0877a6", "0xf8be34", "0xf1813f", "0xdc4e41"]</option>
+        <option name="rangeValues">[0,30,70,100]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>KPI Group System Records</title>
+      <single>
+        <search base="metrics">
+          <query>| search kpi_name="System Collection" | timechart limit=30 span=1h max(alert_value) by kpi_name</query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051", "0x0877a6", "0xf8be34", "0xf1813f", "0xdc4e41"]</option>
+        <option name="rangeValues">[0,30,70,100]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+    <panel>
+      <html>placeholder - no kpi</html>
+    </panel>
+    <panel>
+      <html>placeholder - no kpi</html>
+    </panel>
+    <panel>
+      <html>placeholder - no kpi</html>
+    </panel>
+    <panel>
+      <title>KPI User w/o System</title>
+      <single>
+        <search base="metrics">
+          <query>| search kpi_name="User w*" | timechart limit=30 span=1h max(alert_value) by kpi_name</query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051", "0x0877a6", "0xf8be34", "0xf1813f", "0xdc4e41"]</option>
+        <option name="rangeValues">[0,30,70,100]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>KPI System w/o User</title>
+      <single>
+        <search base="metrics">
+          <query>| search kpi_name="System w*" | timechart limit=30 span=1h max(alert_value) by kpi_name</query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051", "0x0877a6", "0xf8be34", "0xf1813f", "0xdc4e41"]</option>
+        <option name="rangeValues">[0,30,70,100]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <html>
+        <h3>Single Value panels above are derived from KPIs on service C1 polled every 5 mins, single value panels below are from the lookups ie immediate ... hence the difference.</h3>
+      </html>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Group User Records</title>
+      <single>
+        <search base="user">
+          <query>| stats count</query>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0</option>
+        <option name="rangeColors">["0x53a051", "0x0877a6", "0xf8be34", "0xf1813f", "0xdc4e41"]</option>
+        <option name="rangeValues">[0,30,70,100]</option>
+        <option name="showSparkline">1</option>
+        <option name="showTrendIndicator">1</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+        <option name="trendColorInterpretation">standard</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="unitPosition">after</option>
+        <option name="useColors">0</option>
+        <option name="useThousandSeparators">1</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Total Group System Records</title>
+      <single>
+        <search base="sys_stats">
+          <query>| fields count </query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Active System Records</title>
+      <single>
+        <search base="sys_stats">
+          <query>| fields active </query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Inactive System Records</title>
+      <single>
+        <search base="sys_stats">
+          <query>| fields in_active </query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Percent Active</title>
+      <single>
+        <search base="sys_stats">
+          <query> | eval percent=(active/(active+in_active))*100
+| fields percent</query>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0.00</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="unit">%</option>
+      </single>
+    </panel>
+    <panel>
+      <title>User w/o System</title>
+      <single>
+        <search base="user">
+          <query>| lookup itsi_notable_group_system_lookup _key OUTPUT title
+| where isnull(title)
+| stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+    <panel>
+      <title>System w/o User</title>
+      <single>
+        <search base="system">
+          <query>| fields _key | lookup itsi_notable_group_user_lookup _key OUTPUT severity
+| where isnull(severity)
+| stats count</query>
+        </search>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Episode State over Time</title>
+      <input type="text" token="span">
+        <label>span</label>
+        <default>1m</default>
+        <initialValue>1m</initialValue>
+      </input>
+      <chart>
+        <search base="system">
+          <query>| rename start_time as _time
+| eval Type=case(is_active==1, "Active", is_active==0, "Broken", 1==1, "Unknown")
+| append [| makeresults | eval Type="now"]
+| timechart minspan=$span$ c by Type</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>System vs User lookup counts</title>
+      <chart>
+        <search base="system">
+          <query>| eval rec=printf("System %s", if(is_active==1, "Active", "Inactive")), _time=start_time 
+| append [| inputlookup itsi_notable_group_user_lookup | eval rec=printf("User Status:%s", status), _time=mod_time ]
+| fields _time, rec
+| append [| makeresults | eval rec="now"]
+| timechart span=1m count by rec</query>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Episode Index Counts</title>
+      <input type="text" token="span2">
+        <label>span</label>
+        <default>10m</default>
+        <initialValue>10m</initialValue>
+      </input>
+      <chart>
+        <search>
+          <query>| tstats count where index IN (itsi*alerts itsi_notable_archive) by index, _time span=$span2$ prestats=t
+| timechart count minspan=$span2$ by index</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Broken Lookups</title>
+      <chart>
+        <search>
+          <query>| union 
+[| inputlookup itsi_notable_group_system_lookup | eval src="system w/o user", system_mod=mod_time]
+[| inputlookup itsi_notable_group_user_lookup | eval src="user w/o system", user_mod=mod_time]
+| eval _time =coalesce(start_time, mod_time) | rename _key as k
+| stats min(_time) as _time, dc(src) as dc_src, values(src) as src by k 
+| where dc_src=1
+| append [| makeresults | eval src="now"]
+| timechart span=1m count by src</query>
+          <earliest>-60m@m</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="charting.axisLabelsX.majorLabelStyle.overflowMode">ellipsisNone</option>
+        <option name="charting.axisLabelsX.majorLabelStyle.rotation">0</option>
+        <option name="charting.axisTitleX.visibility">visible</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.axisTitleY2.visibility">visible</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisX.scale">linear</option>
+        <option name="charting.axisY.abbreviation">none</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.axisY2.abbreviation">none</option>
+        <option name="charting.axisY2.enabled">0</option>
+        <option name="charting.axisY2.scale">inherit</option>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.bubbleMaximumSize">50</option>
+        <option name="charting.chart.bubbleMinimumSize">10</option>
+        <option name="charting.chart.bubbleSizeBy">area</option>
+        <option name="charting.chart.nullValueMode">gaps</option>
+        <option name="charting.chart.showDataLabels">none</option>
+        <option name="charting.chart.sliceCollapsingThreshold">0.01</option>
+        <option name="charting.chart.stackMode">default</option>
+        <option name="charting.chart.style">shiny</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.layout.splitSeries">0</option>
+        <option name="charting.layout.splitSeries.allowIndependentYRanges">0</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisMiddle</option>
+        <option name="charting.legend.mode">standard</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trellis.enabled">0</option>
+        <option name="trellis.scales.shared">1</option>
+        <option name="trellis.size">medium</option>
+      </chart>
+    </panel>
+  </row>  
+  <row>
+    <panel>
+      <title>Group User Lookup</title>
+      <table>
+        <search base="user">
+          <query>| lookup itsi_notable_group_system_lookup _key OUTPUT itsi_policy_id as sys_pid1, policy_id as sys_pid2
+          | eval policy_id=coalesce(itsi_policy_id, coalesce(sys_pid1, coalesce(sys_pid2, "Null")))
+| stats count by status, policy_id
+| join policy_id type=left [| rest report_as=text splunk_server=local /servicesNS/nobody/SA-ITOA/event_management_interface/notable_event_aggregation_policy
+| eval value=spath(value, "{}") 
+| mvexpand value 
+| eval policy_title=spath(value, "title"), policy_id=spath(value, "_key")
+| fields policy_id, policy_title]
+| sort - count
+| appendpipe [| stats sum(count) as count | eval policy_title="Total"]
+| rename count as "Episode Count", policy_title as "Policy"
+| table Policy Episode* status policy_id</query>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>System User Lookup</title>
+      <table>
+        <search base="system">
+          <query>| eval policy_id=coalesce(itsi_policy_id, policy_id), policy_id=coalesce(policy_id, "Null")
+| eval duration=last_time-start_time
+| lookup itsi_notable_group_user_lookup _key OUTPUT status
+| stats sum(event_count) as total_events, avg(event_count) as avg_events, max(event_count) as max_events avg(duration) as avg_durr, max(duration) as max_durr count by is_active, policy_id, status
+| join policy_id [| rest report_as=text splunk_server=local /servicesNS/nobody/SA-ITOA/event_management_interface/notable_event_aggregation_policy
+| eval value=spath(value, "{}")
+| mvexpand value 
+| eval policy_title=spath(value, "title"), policy_id=spath(value, "_key")
+| fields policy_id, policy_title]
+| sort - is_active, count
+| appendpipe [| stats sum(count) as count sum(total_events) as total_events | eval policy_title="Total"]
+| rename count as "Episode Count", policy_title as "Policy"
+| eval avg_events=floor(avg_events), max_events=floor(max_events),avg_durr=floor(avg_durr/60),max_durr=floor(max_durr/60)
+| table Policy Episode* total_events is_active status ```*durr *events```</query>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+    <panel>
+      <title>Archiver Runs</title>
+      <input type="time" token="field1">
+        <label></label>
+        <default>
+          <earliest>-4h@m</earliest>
+          <latest>now</latest>
+        </default>
+      </input>
+      <table>
+        <search>
+          <query>index=_internal source=*itsi_notable_event_archiv* source="/opt/splunk/var/log/splunk/itsi_notable_event_archive-age_notable_event.log" sub_component=notable_event_retention_policy 
+| rex "process:(?&lt;pid&gt;\d+).*notable_event_retention_policy:(?&lt;line&gt;\d+)\] \[(?&lt;method&gt;[^\]]+)](?&lt;message&gt;.*)" | rex "Successfully moved (?&lt;recs&gt;\d+) events, object_type=(?&lt;collection&gt;\w+)"
+| eval recs=coalesce(recs, 0)
+| eventstats min(_time) as _time max(_time) as end by pid
+| eval span=end-_time, s=printf("%d--@@--%d--@@--%d", pid, _time, span)
+| chart sum(recs) as Archived over s by collection
+| rex field=s "(?&lt;PID&gt;\d+)--@@--(?&lt;_time&gt;\d+)--@@--(?&lt;span&gt;\d+)"
+| rename notable_event_group as User, notable_group_system as System
+| table _time span PID System, User
+| fillnull System User value="-"</query>
+          <earliest>$field1.earliest$</earliest>
+          <latest>$field1.latest$</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">cell</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <drilldown>
+          <link target="_blank">/app/itsi/notable_event_archive?pid=$row.PID$&amp;earliest=$earliest$&amp;latest=$latest$</link>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+
+</form>
