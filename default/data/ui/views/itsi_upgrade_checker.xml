@@ -43,7 +43,7 @@
         <initialValue>1m</initialValue>
       </input>
       <html>
-        <div>Helps validate things are working as they should post upgrade.</div>
+        <div>Helps validate things are working as they should post upgrade. </div>
         <ul>
           <li>Set the Upgrade Window input to mark the charts with the start and end time of the upgrade.</li>
           <li>This could be replaced with a search on _internal too when we work that out. </li>
