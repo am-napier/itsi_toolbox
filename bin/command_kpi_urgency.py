@@ -128,7 +128,7 @@ class KpiUrgencyHelper(object):
             kpi_id = "SHKPI-%s" % service_id
         if None in [service_id, kpi_id]:
             raise RuntimeError(f"Missing required fields service:{service_id}, optional (kpi:{kpi_id})")
-        service = self.kvstore.read_object(service_id)
+        service = self.kvstore.read_object(service_id)["body"]
         urgency = record.get('urgency', self.def_urgency)
 
         self.logger.info("DO UPDATE: service:{}, kpi:{} urgency:{}".format(service_id, kpi_id, urgency))
