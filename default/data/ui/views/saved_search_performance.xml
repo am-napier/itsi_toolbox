@@ -1,4 +1,4 @@
-<form>
+<form  version="1.1">
   <label>Saved Search Review</label>
   <description>Which searches are the slowest</description>
   <fieldset submitButton="false" autoRun="true">
