@@ -1,9 +1,13 @@
 Install splunklib into this folder -> [splunklib](https://github.com/splunk/splunk-sdk-python)
 
-git clone https://github.com/splunk/splunk-sdk-python.git
+Execute get_splunklib.sh in itsi_toolbox/lib
 
-then move splunklib back into lib, ie you should have itsi_toolbox/lib/splunklib
+You should have this:
+
+/opt/splunk/etc/apps/itsi_toolbox/lib$ ls -l
+-rw-rw-r-- 1 splunk splunk  --- README.md
+-rwxrwxr-x 1 splunk splunk  --- get_splunklib.sh
+drwxrwxr-x 5 splunk splunk --- splunklib
+/opt/splunk/etc/apps/itsi_toolbox/lib$
 
 Last tested with 1.7.4
-
-or execute the get_splunklib.sh in itsi_toolbox/lib
