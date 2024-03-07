@@ -16,39 +16,82 @@ EXIT_FILE_EXISTS = 4
 PROG_NAME = "cp_utils"
 
 def usage_help():
-    print(f""" {PROG_NAME} : [--user] [--pswd] [--host] [--port] [--file] [--name] action [sub_action]
+    print(f""" {PROG_NAME} [options] action 
           
   This program is a helper to enable CLI and automation easier access to management functions with the REST API
   provided around ITSI content packs.
                   
   options:
-          token : (string) splunk authentication token, takes precendence over user/pswd
-          user  : (string) splunk user to execute with (default=admin) 
-          pswd  : (string) password for the user 
-          host  : (string) splunk searchhead (default=localhost)
-          port  : (int) management port (default=8089)
-          file  : (string) a file path for the content packs authorship definition, required for author_install and author_fetch only
-          name  : (string) name of the app to work on, see app.conf.ui.label or itsi/config.json->title**
-          cert  : (string) path to a certificate or None to ignore (default None)
-          version : (string)++ if a specific version should be used specify here (TODO)
-          enabled : (unary)+ when doing action install you must explicitly enable objects being installed (default False)
-          overwrite : (unary)+ when creating an authorship definition this allows overwrite of existing file (default:False) 
+          --token TOKEN     (string, default=None) 
+                            Splunk authentication token, takes precendence over user/pswd
+          
+          --user USER_NAME  (string, default=admin)  
+                            Splunk user to execute with. 
 
-      + unary means its a unary option and no value should be provided for this option 
-                  ie {PROG_NAME} --enabled --user bruce --pswd d0nt#m4k3@m3!m4d
-      ++ versions not yet implemented, needs attention/research to understand the implications.
+          --pswd PASSWORD   (string, default=None) 
+                            Password for the user.  If no password was specified and no token was passed it will ask on stdin
+                            for a value. 
+          
+          --host HOST_NAME  (string, default=localhost)
+                            Splunk searchhead
+          
+          --port PORT       (int, default=8089)) 
+                            Management port
+          
+          --file FILE_PATH  (string, default=None) 
+                            A file path for the content packs authorship definition, required for author_install and author_fetch only
+          
+          --name APP_NAME   (string, default=None) 
+                            Name of the app to work on, see app.conf.ui.label or itsi/config.json->title**
+          
+          --cert CERT_PATH  (string, default=None) 
+                            Path to a certificate or None to ignore
+          
+          --version VERSION_STRING  
+                            (string, default=None)
+                            Versions not yet implemented, needs attention/research to understand the implications.
+                            Come find me if this comes up.
+          
+          --disabled        (unary, default=False)
+                            When running action deploy if you want the objects disabled pass this flag
+                            Otherwise they'll all be enabled and active
+          
+          --overwrite       (unary, default=False)
+                            When creating an authorship definition this allows overwrite of existing file
+      
 
   action  - the task we are going to perform, one of the following
-    * list    : list the installed apps (todo exclude the OOB apps)
-    * status  : (requires name) get the status on the named app and its components 
-    * deploy  : (requires name, optional enabled) deploy the features of the named app, ie add them to the kvstore so they can be used
-    * refresh : refresh the status of all content packs, ie run after clean
-    * clean   : (requires name) remove the named app's components from the system, leaves the app in place
-    * author_list    : list all the known authored content packs
-    * author_status  : (requires name) of the current named app
-    * author_install : (requires file) install the named app, requires --file
-    * author_fetch   : (requires name, optional file, overwrite) create the file for the CP authorship definition, uses name.json as default filename
-    * author_remove  : remove the named authorship record from the kvstore
+          
+        list                List the installed apps.  There is no nice way to order these yet
+          
+        status              (requires: name) 
+                            Get the status on the named app and its components 
+          
+        deploy              (requires: name, optional disabled) 
+                            Deploy the features of the named app to the kvstore so they can be used from within ITSI
+                            Required once the app is installed to avoid the UI step to install the content pack.                            
+          
+        refresh             
+                            refresh the status of all content packs, ie run after clean
+          
+        clean               (requires: name)
+                            remove the named app's components from the system, leaves the app in place
+          
+        author_list
+                            list all the known authored content packs
+          
+        author_status       (requires: name)
+                            Gets the status of the current named app
+          
+        author_install      (requires: file) 
+                            install the named app so its contents are visible in the authorship page.
+                            should already be installed in the apps directory on the SH
+          
+        author_fetch        (requires: name, optional: file, overwrite) 
+                            create the file for the CP authorship definition, uses name.json as default filename
+          
+        author_remove
+                            remove the named authorship record from the kvstore
 """)          
     sys.exit(EXIT_HELP_DISPLAYED)
 
@@ -74,7 +117,7 @@ def setup(argv):
     p.add_argument("--cert",      help="path for certificate, if required", type=str, default=None)
     p.add_argument("--version",   help="content pack version string", type=str, default=None)
     p.add_argument("--overwrite", help="overwrite the file when running author_fetch", action="store_true", default=False)
-    p.add_argument("--enabled", help="Install objects as enabled", action="store_true", default=False)
+    p.add_argument("--disabled",  help="Install objects as disabled", action="store_true", default=False)
     p.add_argument("--file",   help="Path to content pack authorship json", type=str)
     p.add_argument("--name",   help="Content pack name, ie whats shown in the UI, app.conf->ui->label or itsi/config.json->title", type=str)
 
@@ -189,9 +232,9 @@ id : {app['id']}
                     output[key] = [i['id'] for i in value]
             output = {
                 "resolution": "overwrite",
-                "enabled": 1 if self.args.enabled else 0,
+                "enabled": 0 if self.args.disabled else 1,
                 "backfill": "false",
-                "saved_search_action": "enable" if self.args.enabled else "disable",
+                "saved_search_action": "disable" if self.args.disabled else "enable",
                 #"install_all":1
                 "content" : output
             }
