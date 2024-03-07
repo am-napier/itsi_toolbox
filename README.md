@@ -9,8 +9,8 @@ Contains macros, custom commands and dashboards.
 3. Optional - if deploying in production you might want to review permissions on commands like itsidelete, confitsi, mwcal and probably remove sleep completely
 
 ### Troubleshooting:
-Logging is provided in $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
-If commands fail first check the search log, usually its no splunklib, then check the itsi_toolbox.log.
+Logging is provided in $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log.
+If commands fail first check the search log (from job inspector), usually its no splunklib, then check the itsi_toolbox.log.
 
 
 ## Macros
