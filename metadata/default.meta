@@ -6,14 +6,18 @@ access = read : [ admin, sc_admin, itoa_admin ], write : [ admin, sc_admin, itoa
 export = system
 owner = admin
 version = 8.2.6
-#export = none
 
 [commands/confitsi]
 access = read : [ admin, sc_admin, itoa_admin ], write : [ admin, sc_admin, itoa_admin ]
 export = system
 owner = admin
 version = 8.2.6
-#export = none
+
+[commands/mwcal]
+access = read : [ admin, sc_admin, itoa_admin ], write : [ admin, sc_admin, itoa_admin ]
+export = system
+owner = admin
+version = 8.2.6
 
 [macros]
 access = read: [ * ], write: [ admin, sc_admin, itoa_admin, itoa_team_admin ], delete: [ admin, sc_admin, itoa_admin, itoa_team_admin ]
