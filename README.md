@@ -19,18 +19,18 @@ If commands fail first check the search log (from job inspector), usually its no
 Enables actions from the CLI to
 
 ### For custom content packs
-**list** all the installed apps
-**status** gets the status of the named app and its components 
-**deploy** the features of the named app, ie add them to the kvstore so they can be used in ITSI
-**refresh** the status of all content packs in case you deleted its objects, ie runs itsicontentpackstatus command from search 
-**clean** removes the named app's components from the system, leaves the app folder in place
+* **list** all the installed apps
+* **status** gets the status of the named app and its components
+* **deploy** the features of the named app, ie add them to the kvstore so they can be used in ITSI
+* **refresh** the status of all content packs in case you deleted its objects, ie runs itsicontentpackstatus command from search 
+* **clean** removes the named app's components from the system, leaves the app folder in place
 
 ### For authored content
-**author_list** lists all the known authored content packs
-**author_status** gets the status of the current named app
-**author_install** installs the named app
-**author_fetch** create the file for the CP authorship definition, uses <--name>.json as default filename
-**author_remove** remove the named authorship record from the kvstore
+* **author_list** lists all the known authored content packs
+* **author_status** gets the status of the current named app
+* **author_install** installs the named app
+* **author_fetch** create the file for the CP authorship definition, uses <--name>.json as default filename
+* **author_remove** remove the named authorship record from the kvstore
 
 See the help for details on arguments required for each combination of commands:
 splunk cmd python cp_utils.py [-h] [--help] [help]
