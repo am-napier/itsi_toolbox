@@ -1,13 +1,17 @@
 
 # itsi_toolbox
-Some resources that make some ITSI jobs a little bit easier
+These are some resources that make some ITSI jobs a little bit easier.
+Contains macros, custom commands and dashboards.  
 
-Deploy as a splunk app in $SPLUNK_HOME/etc/apps.
+## Installation:
+1. Deploy as a splunk app in $SPLUNK_HOME/etc/apps.
+2. Add splunklib to itsi_toolbox/lib, see lib/README.md
+3. Optional - if deploying in production you might want to review permissions on commands like itsidelete, confitsi, mwcal and probably remove sleep completely
 
-Add [splunklib](https://github.com/splunk/splunk-sdk-python/releases/tag/1.7.4) to itsi_toolbox/lib.  
-### See lib/README.md
-
+### Troubleshooting:
 Logging is provided in $SPLUNK_HOME/var/log/splunk/itsi_toolbox.log
+If commands fail first check the search log, usually its no splunklib, then check the itsi_toolbox.log.
+
 
 ## Macros
 ### itoa_rest(type, field, regex [, fields])
