@@ -45,7 +45,7 @@ Run it and expand it to see what it does.
 #### args
 |argument|description|
 |-----------|---------|
-|type|one of the values from get supported objects, e.g. service, entity, glass_table etc|
+|type|one of the values from get_supported_objects, e.g. service, entity, glass_table etc|
 |field|name of the field to search for, e.g. host, title, _key|
 |regex|unbounded regex to use in the search, note this means it contains the string|
 |fields| CSV list of fields to return, default is title,_key|
@@ -53,10 +53,10 @@ Run it and expand it to see what it does.
 ```| `itoa_rest("<type>", "<field>", "<value", "<field_list>")` ```
 #### examples:
 List all services that start with Buttercup and return id (aka _key), title and kpis:
-```| `itoa_rest("status", "title", "^Butter", "_key,title,kpis")` ```
+```| `itoa_rest("service", "title", "^Butter", "_key,title,kpis")` ```
 
 List all services but return just id and title (note 3 arg version):
-```| `itoa_rest("status", "title", "^Butter")` ```
+```| `itoa_rest("service", "title", "^Butter")` ```
 
 Get all entities that have a host field (info or alias) that starts with `win`
 ```| `itoa_rest("entity", "host", "^win", "_key,title,_status")` ```
