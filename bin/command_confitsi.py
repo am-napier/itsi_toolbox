@@ -75,6 +75,27 @@ class ConfITSICommand(StreamingCommand):
         default=True,
         validate=validators.Boolean()) 
 
+    opt_is_bulk = Option(
+        doc='''
+        **Syntax:** **is_bulk=***boolean*
+        **Description:** runs a different endpoint that is not the bulk update endpoint, will be slower
+        **Default:** True''',
+        name='is_bulk',
+        require=False,
+        default=True,
+        validate=validators.Boolean()) 
+
+    # when updates are run through the object_type endpoint the _key is required, for create it is not allowed
+    opt_is_update = Option(
+        doc='''
+        **Syntax:** **is_update=***boolean*
+        **Description:**Is the request an update or create, applies only when is_bulk=False
+        **Default:** False''',
+        name='is_update',
+        require=False,
+        default=False,
+        validate=validators.Boolean()) 
+
     opt_payload = Option(
         doc='''
         **Syntax:** **payload=***fieldname*
@@ -119,7 +140,18 @@ class ConfITSICommand(StreamingCommand):
                 }
             else:
                 try:
-                    yield {**kvstore.write_bulk(body), **{"input":body}}
+                    
+                    if self.opt_is_bulk:
+                        yield {**kvstore.write_bulk(body), **{"input":body}}
+                    else:
+                        ''' 
+                        for create we use itoa_interface/object_type, if key is passed we use it, if not the system creates one 
+                        for update we use itoa_object_type/_key set, key must be passed or an error will be generated, when update is called with no key it will create
+                        '''
+                        key = None
+                        if "_key" in body and self.opt_is_update:
+                            key=body["_key"]
+                        yield {**kvstore.write_object(key, body, self.opt_is_partial), **{"input":body}}
                 except Exception as e:
                     yield {"body" : f"Update failed {e}", 
                            "status" : "failed", 
