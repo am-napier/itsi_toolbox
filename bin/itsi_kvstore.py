@@ -36,11 +36,11 @@ class KVStoreHelper(object):
 
         try:
             body=json.loads(response['body'].read())
-            self.logger.info('handle_response response {} body{} status={} context={}'.format(response, body, status, context))
+            self.logger.debug('handle_response response {} body{} status={} context={}'.format(response, body, status, context))
         except:
             body=""
 
-        self.logger.info(f'BODDDY :{body}')
+        self.logger.debug(f'BODDDY :{body}')
         return {
             "status":response['status'],
             "body": body,
@@ -80,7 +80,7 @@ class KVStoreHelper(object):
             self.logger.debug("read_service cache hit")
             return self._cache[key]
         else:
-            self.logger.debug("read_service cache miss")
+            self.logger.info("read_service cache miss")
             resp = self.service.get(self.get_uri(key))
             self._cache[key] = self.handle_response(resp, "read_object")
             return self._cache[key]
