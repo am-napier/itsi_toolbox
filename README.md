@@ -294,24 +294,24 @@ Notes:
 
 ### mwcal
 Create, update and delete maintenance windows from the search bar.
-Note all properties are required for an update even if they are not being updated
 This is a streaming command and gets its input from the events for each row, therefore it can 
-operate on many objects in a single search, but it will be slow.
+operate on many objects in a single search, but it will be slow as it is singled threaded.
 
-Create and update are essentially the same except you pass the key for an update, no key to create.
+Create and update are essentially the same except you pass the key for an update, no key required to create.
+
 Events require the following:
 |argument|description|
 |--------|-----------|
 |start | an epoch time|
 |end | an epoch time, note you can pass duration (in mins) instead and it will be combined with start |
-|title | the string name of the calendar |
+|title | the string name of the calendar being operated upon|
 |ids | a multi-value list of ids for the objects being added |
 |type | one of entity or service depending on your ids. |
 
 Delete has two forms, see examples
 
 #### Examples
-Create some windows from a lookup, assume the lookup has a row for each entity with start time and duration ...
+Create some windows from a lookup, assume the lookup has a row for each entity with start time and duration.
 ``` 
 | inputlookup mw.csv
 | stats values(entity_key) as ids by start, duration
