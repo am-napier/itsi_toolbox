@@ -311,15 +311,22 @@ Events require the following:
 Delete has two forms, see examples
 
 #### Examples
-Create some windows from a lookup, assume the lookup has a row for each entity with start time and duration.
+Create some windows for all entities that start with lnx starting now and running for 60 minutes.
 ``` 
-| inputlookup mw.csv
-| stats values(entity_key) as ids by start, duration
-| eval title=printf("Entity maintenance %s to %s", strftime(start, "%F %T"), strftime(start+duration*60, "%F %T")) 
+| `itoa_rest("entity", "title", "^lnx", "_key,title")`
+| stats values(id) as ids
+| eval start=now(), duration=60, type="entity"
+| eval title=printf("Entity Maintenance Example %s to %s", strftime(start, "%F %T"), strftime(start+duration*60, "%F %T"))
 | mwcal mode=upsert
 ```
+Review the changes
+```
+| `mw_rest("Entity Maintenance Example")`
+| eval start=strftime(spath(value, "start_time"), "%F %T"), end=strftime(spath(value, "end_time"), "%F %T")
+| prettyprint
+```
 
-Update all Sunday calendars to be one week later
+Update all Sunday calendars to be one week later, note mw_rest matches Sunday as contains, ie /.\*Sunday.\*/
 ```
 | `mw_rest("Sunday")`
 | eval start=tonumber(spath(value, "start_time"))+86400*7, end=tonumber(spath(value, "end_time"))+86400*7, obj=spath(value, "objects{}") 
